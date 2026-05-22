@@ -25,8 +25,8 @@ if($_SERVER["REQUEST_METHOD"] == "POST"){
 
     $userLimpo = preg_replace('/[^0-9a-zA-Z@._]/', '', $user);
 
-    // 🔥 ALTERADO AQUI: usuarios -> usuario
-$stmt = $conexao->prepare("SELECT Senha, Email FROM usuario WHERE Email=? LIMIT 1");
+    // 🔥 ALTERAÇÃO: id -> ID_Usuario
+    $stmt = $conexao->prepare("SELECT ID_Usuario, Nome, Email, Senha FROM usuario WHERE Email=? LIMIT 1");
 
     if(!$stmt){
         die("Erro SQL: " . $conexao->error);
@@ -39,13 +39,18 @@ $stmt = $conexao->prepare("SELECT Senha, Email FROM usuario WHERE Email=? LIMIT 
 
     if($row = $result->fetch_assoc()){
 
-        $hash = $row["senha"];
-        $contato = $row["contato"];
+        // 🔥 ALTERAÇÃO: id -> ID_Usuario
+        $idUsuario = $row["ID_Usuario"];
+        $hash = $row["Senha"];
+        $contato = $row["Email"];
 
         if(password_verify($pass, $hash)){
 
             $_SESSION["logado"] = true;
             $_SESSION["usuario"] = $contato;
+
+            // 🔥 ALTERAÇÃO FINAL
+            $_SESSION["ID_Usuario"] = $idUsuario;
 
             header("Location: tela_inicial.php");
             exit;
@@ -70,40 +75,28 @@ $stmt = $conexao->prepare("SELECT Senha, Email FROM usuario WHERE Email=? LIMIT 
 
 <style>
 
+/* CSS INALTERADO */
+
 body{
     margin:0;
     padding:0;
-
-    background:
-    radial-gradient(circle at center, #07111f, #02060d);
-
+    background: radial-gradient(circle at center, #07111f, #02060d);
     color:#FFD700;
-
     display:flex;
     justify-content:center;
     align-items:center;
-
     height:100vh;
-
     font-family:Arial;
 }
 
 .box{
-
     background:#0b1726;
-
     padding:30px;
-
     border-radius:20px;
-
     width:320px;
-
     text-align:center;
-
     border:2px solid #f5a623;
-
-    box-shadow:
-    0 0 25px rgba(245,166,35,0.7);
+    box-shadow:0 0 25px rgba(245,166,35,0.7);
 }
 
 .logo{
@@ -112,50 +105,29 @@ body{
     border-radius:10px;
 }
 
-h2{
-    color:#f5a623;
-}
+h2{ color:#f5a623; }
 
 input{
-
     width:100%;
-
     padding:12px;
-
     margin-top:10px;
-
     border-radius:10px;
-
     border:1px solid #2c4c6e;
-
     background-color:#091521;
-
     color:white;
-
     outline:none;
-
     box-sizing:border-box;
 }
 
 button{
-
     width:100%;
-
     padding:12px;
-
     margin-top:20px;
-
-    background:
-    linear-gradient(90deg, #ff8c00, #ff3c00);
-
+    background:linear-gradient(90deg, #ff8c00, #ff3c00);
     border:none;
-
     border-radius:30px;
-
     color:black;
-
     font-weight:bold;
-
     cursor:pointer;
 }
 
@@ -166,9 +138,7 @@ a{
     text-decoration:none;
 }
 
-a:hover{
-    color:#ffffff;
-}
+a:hover{ color:#ffffff; }
 
 .erro{
     color:red;
@@ -189,16 +159,9 @@ a:hover{
 
 <form method="POST">
 
-<input
-name="user"
-placeholder="Email, CPF ou Celular"
->
+<input name="user" placeholder="Email, CPF ou Celular">
 
-<input
-name="pass"
-type="password"
-placeholder="Senha"
->
+<input name="pass" type="password" placeholder="Senha">
 
 <button>Entrar</button> 
 
@@ -208,9 +171,7 @@ placeholder="Senha"
 
 <a href="cadastro.php">Criar conta</a>
 
-<a href="recuperar_senha.php">
-Esqueci minha senha
-</a>
+<a href="recuperar_senha.php">Esqueci minha senha</a>
 
 </div>
 

@@ -178,7 +178,6 @@ body {
 
         <?php if(!isset($_SESSION['logado']) || $_SESSION['logado'] != true){ ?>
             
-            <!-- 🔥 BOTÃO LOGIN AGORA FUNCIONA -->
             <a href="login.php">
                 <button class="login">Login</button>
             </a>
@@ -196,12 +195,17 @@ body {
 
 <div class="container">
 
+<!-- 🔥 MENU COM "MINHA CONTA" PRIMEIRO -->
 <aside class="menu">
     <ul>
+
+        <li><a href="Usuario.php" style="color:inherit; text-decoration:none;">👤 Minha Conta</a></li>
+
         <li>🎮 Categoria</li>
         <li>📚 Biblioteca</li>
         <li>⚙️ Configurações</li>
         <li>🛒 Carrinho</li>
+
     </ul>
 </aside>
 

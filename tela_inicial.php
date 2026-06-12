@@ -202,7 +202,11 @@ body {
         <li><a href="Usuario.php" style="color:inherit; text-decoration:none;">👤 Minha Conta</a></li>
 
         <li>🎮 Categoria</li>
-        <li>📚 Biblioteca</li>
+        <li>
+    <a href="biblioteca.php" style="color:inherit; text-decoration:none;">
+        📚 Biblioteca
+    </a>
+</li>
         <li>⚙️ Configurações</li>
         <li>🛒 Carrinho</li>
 

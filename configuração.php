@@ -1,30 +1,28 @@
 <?php
 include "conexao.php";
-
 session_start();
 
-// Troque depois pelo usuário logado
 $id_usuario = 1;
-
 $mensagem = "";
 
-// Buscar dados do usuário
-$sql = "SELECT Email, CPF, Celular, Senha
-        FROM usuario
-        WHERE ID_usuario = ?";
+// =========================
+// CONTROLAR ETAPA
+// =========================
+if (!isset($_SESSION["etapa_senha"])) {
+    $_SESSION["etapa_senha"] = 1;
+}
 
+$etapa = $_SESSION["etapa_senha"];
+
+
+// =========================
+// BUSCAR USUÁRIO
+// =========================
+$sql = "SELECT Email, CPF, Celular, Senha FROM usuario WHERE ID_usuario = ?";
 $stmt = mysqli_prepare($conexao, $sql);
 mysqli_stmt_bind_param($stmt, "i", $id_usuario);
 mysqli_stmt_execute($stmt);
-
-mysqli_stmt_bind_result(
-    $stmt,
-    $email,
-    $cpf,
-    $celular,
-    $senha_hash
-);
-
+mysqli_stmt_bind_result($stmt, $email, $cpf, $celular, $senha_hash);
 mysqli_stmt_fetch($stmt);
 mysqli_stmt_close($stmt);
 
@@ -32,11 +30,7 @@ mysqli_stmt_close($stmt);
 // ===========================
 // ATUALIZAR DADOS
 // ===========================
-if (
-    $_SERVER["REQUEST_METHOD"] == "POST" &&
-    isset($_POST["acao"]) &&
-    $_POST["acao"] == "dados"
-) {
+if ($_SERVER["REQUEST_METHOD"] == "POST" && ($_POST["acao"] ?? "") == "dados") {
 
     $novo_email = trim($_POST["email"]);
     $novo_cpf = trim($_POST["cpf"]);
@@ -44,40 +38,19 @@ if (
     $senha_confirmacao = $_POST["senha_confirmacao"];
 
     if (!password_verify($senha_confirmacao, $senha_hash)) {
-
         $mensagem = "Senha incorreta.";
-
     } else {
 
-        $sql = "
-        UPDATE usuario
-        SET
-            Email = ?,
-            CPF = ?,
-            Celular = ?
-        WHERE ID_usuario = ?";
-
+        $sql = "UPDATE usuario SET Email=?, CPF=?, Celular=? WHERE ID_usuario=?";
         $stmt = mysqli_prepare($conexao, $sql);
-
-        mysqli_stmt_bind_param(
-            $stmt,
-            "sssi",
-            $novo_email,
-            $novo_cpf,
-            $novo_celular,
-            $id_usuario
-        );
+        mysqli_stmt_bind_param($stmt, "sssi", $novo_email, $novo_cpf, $novo_celular, $id_usuario);
 
         if (mysqli_stmt_execute($stmt)) {
-
             $mensagem = "Dados atualizados com sucesso.";
-
             $email = $novo_email;
             $cpf = $novo_cpf;
             $celular = $novo_celular;
-
         } else {
-
             $mensagem = "Erro ao atualizar dados.";
         }
 
@@ -87,61 +60,70 @@ if (
 
 
 // ===========================
-// ALTERAR SENHA
+// ETAPA 1 - ENVIAR CÓDIGO (EMAIL DO BANCO)
 // ===========================
-if (
-    $_SERVER["REQUEST_METHOD"] == "POST" &&
-    isset($_POST["acao"]) &&
-    $_POST["acao"] == "senha"
-) {
+if ($_SERVER["REQUEST_METHOD"] == "POST" && ($_POST["acao"] ?? "") == "enviar_codigo") {
 
-    $senha_atual = $_POST["senha_atual"];
-    $nova_senha = $_POST["nova_senha"];
-    $confirmar_senha = $_POST["confirmar_senha"];
+    $_SESSION["codigo_email"] = rand(100000, 999999);
+    $_SESSION["etapa_senha"] = 2;
 
-    if (!password_verify($senha_atual, $senha_hash)) {
+    mail(
+        $email,
+        "Código de verificação",
+        "Seu código é: " . $_SESSION["codigo_email"]
+    );
 
-        $mensagem = "Senha atual incorreta.";
+    header("Location: " . $_SERVER["PHP_SELF"]);
+    exit;
+}
 
-    } elseif ($nova_senha != $confirmar_senha) {
 
-        $mensagem = "As senhas não coincidem.";
+// ===========================
+// ETAPA 2 - VERIFICAR CÓDIGO
+// ===========================
+if ($_SERVER["REQUEST_METHOD"] == "POST" && ($_POST["acao"] ?? "") == "verificar_codigo") {
 
-    } elseif (strlen($nova_senha) < 6) {
+    $codigo = trim($_POST["codigo"]);
 
-        $mensagem = "A senha deve ter pelo menos 6 caracteres.";
-
+    if ($codigo != $_SESSION["codigo_email"]) {
+        $mensagem = "Código inválido.";
     } else {
 
-        $novo_hash = password_hash(
-            $nova_senha,
-            PASSWORD_DEFAULT
-        );
+        $_SESSION["etapa_senha"] = 3;
 
-        $sql = "
-        UPDATE usuario
-        SET Senha = ?
-        WHERE ID_usuario = ?";
+        header("Location: " . $_SERVER["PHP_SELF"]);
+        exit;
+    }
+}
 
+
+// ===========================
+// ETAPA 3 - TROCAR SENHA
+// ===========================
+if ($_SERVER["REQUEST_METHOD"] == "POST" && ($_POST["acao"] ?? "") == "trocar_senha") {
+
+    $nova_senha = $_POST["nova_senha"];
+    $confirmar = $_POST["confirmar_senha"];
+
+    if ($nova_senha != $confirmar) {
+        $mensagem = "Senhas não coincidem.";
+    } elseif (strlen($nova_senha) < 6) {
+        $mensagem = "Senha muito curta.";
+    } else {
+
+        $hash = password_hash($nova_senha, PASSWORD_DEFAULT);
+
+        $sql = "UPDATE usuario SET Senha=? WHERE ID_usuario=?";
         $stmt = mysqli_prepare($conexao, $sql);
-
-        mysqli_stmt_bind_param(
-            $stmt,
-            "si",
-            $novo_hash,
-            $id_usuario
-        );
-
-        if (mysqli_stmt_execute($stmt)) {
-
-            $mensagem = "Senha alterada com sucesso.";
-
-        } else {
-
-            $mensagem = "Erro ao alterar senha.";
-        }
-
+        mysqli_stmt_bind_param($stmt, "si", $hash, $id_usuario);
+        mysqli_stmt_execute($stmt);
         mysqli_stmt_close($stmt);
+
+        unset($_SESSION["etapa_senha"]);
+        unset($_SESSION["codigo_email"]);
+
+        header("Location: " . $_SERVER["PHP_SELF"]);
+        exit;
     }
 }
 ?>
@@ -158,7 +140,7 @@ if (
 body{
     background:#111;
     color:#ffd700;
-    font-family:Arial,sans-serif;
+    font-family:Arial;
     margin:0;
     padding:20px;
 }
@@ -168,148 +150,158 @@ body{
     margin:auto;
 }
 
+/* VOLTAR */
+.voltar{
+    position:absolute;
+    top:10px;
+    left:10px;
+    color:#ffd700;
+    text-decoration:none;
+}
+
+/* CARD */
 .card{
     background:#1a1a1a;
     border:2px solid #ffd700;
     border-radius:10px;
     padding:20px;
-    margin-bottom:25px;
+    margin-top:20px;
 }
 
-h1,h2{
-    text-align:center;
-}
-
-label{
-    display:block;
-    margin-top:10px;
-    margin-bottom:5px;
-}
-
-input{
+input,button{
     width:100%;
     padding:10px;
+    margin-top:10px;
     border:none;
     border-radius:5px;
-    box-sizing:border-box;
 }
 
 button{
-    width:100%;
-    margin-top:15px;
-    padding:12px;
-    border:none;
-    border-radius:5px;
     background:#ffd700;
-    color:#000;
     font-weight:bold;
     cursor:pointer;
 }
 
 button:hover{
-    background:#fff;
+    background:white;
 }
 
 .mensagem{
     text-align:center;
-    color:white;
-    margin-bottom:20px;
+    margin-bottom:10px;
+}
+
+.menu{
+    display:flex;
+    gap:10px;
+}
+
+.menu button{
+    flex:1;
 }
 
 </style>
 </head>
+
 <body>
 
 <div class="container">
 
+<a class="voltar" href="biblioteca.php">⬅ Voltar</a>
+
 <h1>Configurações da Conta</h1>
 
 <?php if(!empty($mensagem)): ?>
-<div class="mensagem">
-    <?php echo htmlspecialchars($mensagem); ?>
-</div>
+<div class="mensagem"><?php echo htmlspecialchars($mensagem); ?></div>
 <?php endif; ?>
 
+<!-- MENU -->
+<div class="menu">
+    <button onclick="showTab('dados')">Dados</button>
+    <button onclick="showTab('senha')">Senha</button>
+</div>
 
-<!-- DADOS CADASTRAIS -->
-<div class="card">
+<!-- DADOS -->
+<div class="card" id="tab-dados">
 
-<h2>Dados Cadastrais</h2>
+<h2>Dados</h2>
 
 <form method="POST">
-
 <input type="hidden" name="acao" value="dados">
 
 <label>Email</label>
-<input
-type="email"
-name="email"
-value="<?php echo htmlspecialchars($email); ?>"
-required>
+<input name="email" value="<?php echo htmlspecialchars($email); ?>">
 
 <label>CPF</label>
-<input
-type="text"
-name="cpf"
-value="<?php echo htmlspecialchars($cpf); ?>">
+<input name="cpf" value="<?php echo htmlspecialchars($cpf); ?>">
 
 <label>Celular</label>
-<input
-type="text"
-name="celular"
-value="<?php echo htmlspecialchars($celular); ?>">
+<input name="celular" value="<?php echo htmlspecialchars($celular); ?>">
 
 <label>Confirme sua senha</label>
-<input
-type="password"
-name="senha_confirmacao"
-required>
+<input type="password" name="senha_confirmacao" required>
 
-<button type="submit">
-Salvar Dados
-</button>
-
+<button>Salvar</button>
 </form>
 
 </div>
 
+<!-- SENHA -->
+<div class="card" id="tab-senha" style="display:none;">
 
-<!-- ALTERAR SENHA -->
-<div class="card">
+<h2>Trocar Senha</h2>
 
-<h2>Alterar Senha</h2>
+<?php if($etapa == 1): ?>
 
+<!-- ETAPA 1 -->
 <form method="POST">
+<input type="hidden" name="acao" value="enviar_codigo">
 
-<input type="hidden" name="acao" value="senha">
+<p>Clique abaixo para receber o código no seu e-mail cadastrado.</p>
 
-<label>Senha Atual</label>
-<input
-type="password"
-name="senha_atual"
-required>
+<button>Enviar Código</button>
+</form>
+
+<?php elseif($etapa == 2): ?>
+
+<!-- ETAPA 2 -->
+<form method="POST">
+<input type="hidden" name="acao" value="verificar_codigo">
+
+<label>Código recebido</label>
+<input name="codigo" required>
+
+<button>Verificar Código</button>
+</form>
+
+<?php elseif($etapa == 3): ?>
+
+<!-- ETAPA 3 -->
+<form method="POST">
+<input type="hidden" name="acao" value="trocar_senha">
 
 <label>Nova Senha</label>
-<input
-type="password"
-name="nova_senha"
-required>
+<input type="password" name="nova_senha" required>
 
-<label>Confirmar Nova Senha</label>
-<input
-type="password"
-name="confirmar_senha"
-required>
+<label>Confirmar Senha</label>
+<input type="password" name="confirmar_senha" required>
 
-<button type="submit">
-Trocar Senha
-</button>
-
+<button>Alterar Senha</button>
 </form>
 
+<?php endif; ?>
+
 </div>
 
 </div>
+
+<script>
+function showTab(tab){
+    document.getElementById("tab-dados").style.display = "none";
+    document.getElementById("tab-senha").style.display = "none";
+    document.getElementById("tab-" + tab).style.display = "block";
+}
+</script>
 
 </body>
 </html>

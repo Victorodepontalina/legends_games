@@ -21,7 +21,7 @@ $games = [
     ["nome"=>"Elden Ring","preco"=>320.99,"nota"=>4.5,"img"=>"imagens/Elden_Ring.jpg"],
     ["nome"=>"Cyberpunk 2077","preco"=>349.90,"nota"=>4.8,"img"=>"imagens/cyberpunk.jpg"],
     ["nome"=>"Call of Duty: Warzone","preco"=>349.90,"nota"=>4.8,"img"=>"imagens/Call_of_Duty.jpg"],
-    ["nome"=>"Call of Duty: Warzone","preco"=>349.90,"nota"=>4.8,"img"=>"imagens/Call_of_duty_3.png"],
+    ["nome"=>"Call of Duty: Warzone 3","preco"=>349.90,"nota"=>4.8,"img"=>"imagens/Call_of_duty_3.png"],
 ];
 
 $novos = [
@@ -127,6 +127,12 @@ body {
     justify-content: center;
 }
 
+/* Garante que o link ocupe o espaço correto e não quebre o visual */
+.game-link {
+    text-decoration: none;
+    color: inherit;
+}
+
 .card {
     width: 240px;
     background: #222;
@@ -175,41 +181,28 @@ body {
     <div class="logo">Legends_Games</div>
 
     <div class="auth">
-
         <?php if(!isset($_SESSION['logado']) || $_SESSION['logado'] != true){ ?>
-            
             <a href="login.php">
                 <button class="login">Login</button>
             </a>
-
             <?php if(!$cadastroRealizado){ ?>
                 <a href="cadastro.php">
                     <button class="cadastro">Cadastrar</button>
                 </a>
             <?php } ?>
-
         <?php } ?>
-
     </div>
 </header>
 
 <div class="container">
 
-<!-- 🔥 MENU COM "MINHA CONTA" PRIMEIRO -->
 <aside class="menu">
     <ul>
-
         <li><a href="Usuario.php" style="color:inherit; text-decoration:none;">👤 Minha Conta</a></li>
-
         <li>🎮 Categoria</li>
-        <li>
-    <a href="biblioteca.php" style="color:inherit; text-decoration:none;">
-        📚 Biblioteca
-    </a>
-</li>
+        <li><a href="biblioteca.php" style="color:inherit; text-decoration:none;">📚 Biblioteca</a></li>
         <li>⚙️ Configurações</li>
         <li>🛒 Carrinho</li>
-
     </ul>
 </aside>
 
@@ -219,16 +212,18 @@ body {
 
 <div class="games">
 <?php foreach($games as $g){ ?>
-<div class="card">
-    <img src="<?= $g['img']; ?>">
-    <div class="card-content">
-        <div class="top-info">
-            <h3><?= htmlspecialchars($g['nome']); ?></h3>
-            <div class="nota">⭐ <?= $g['nota']; ?></div>
+    <a href="tela_de_jogo.php?nome=<?= urlencode($g['nome']); ?>" class="game-link">
+        <div class="card">
+            <img src="<?= $g['img']; ?>">
+            <div class="card-content">
+                <div class="top-info">
+                    <h3><?= htmlspecialchars($g['nome']); ?></h3>
+                    <div class="nota">⭐ <?= $g['nota']; ?></div>
+                </div>
+                <p class="preco">R$ <?= number_format($g['preco'],2,',','.'); ?></p>
+            </div>
         </div>
-        <p class="preco">R$ <?= number_format($g['preco'],2,',','.'); ?></p>
-    </div>
-</div>
+    </a>
 <?php } ?>
 </div>
 
@@ -236,16 +231,18 @@ body {
 
 <div class="games">
 <?php foreach($novos as $n){ ?>
-<div class="card">
-    <img src="<?= $n['img']; ?>">
-    <div class="card-content">
-        <div class="top-info">
-            <h3><?= htmlspecialchars($n['nome']); ?></h3>
-            <div class="nota">⭐ <?= $n['nota']; ?></div>
+    <a href="tela_de_jogo.php?nome=<?= urlencode($n['nome']); ?>" class="game-link">
+        <div class="card">
+            <img src="<?= $n['img']; ?>">
+            <div class="card-content">
+                <div class="top-info">
+                    <h3><?= htmlspecialchars($n['nome']); ?></h3>
+                    <div class="nota">⭐ <?= $n['nota']; ?></div>
+                </div>
+                <p class="preco">R$ <?= number_format($n['preco'],2,',','.'); ?></p>
+            </div>
         </div>
-        <p class="preco">R$ <?= number_format($n['preco'],2,',','.'); ?></p>
-    </div>
-</div>
+    </a>
 <?php } ?>
 </div>
 

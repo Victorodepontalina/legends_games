@@ -1,117 +1,315 @@
 <?php
-// Inclui a conexão com o banco
 include "conexao.php";
+
 session_start();
 
-// Simula usuário logado (substitua pela lógica do seu login)
+// Troque depois pelo usuário logado
 $id_usuario = 1;
 
-// Inicializa mensagem
 $mensagem = "";
 
-// Verifica se o formulário foi enviado
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $novo_email = trim($_POST['email']);
-    $nova_senha = trim($_POST['senha']);
+// Buscar dados do usuário
+$sql = "SELECT Email, CPF, Celular, Senha
+        FROM usuario
+        WHERE ID_usuario = ?";
 
-    if ($novo_email != "" && $nova_senha != "") {
-        if (!filter_var($novo_email, FILTER_VALIDATE_EMAIL)) {
-            $mensagem = "Email inválido!";
-        } else {
-            // Cria hash da nova senha
-            $hash_senha = password_hash($nova_senha, PASSWORD_DEFAULT);
+$stmt = mysqli_prepare($conexao, $sql);
+mysqli_stmt_bind_param($stmt, "i", $id_usuario);
+mysqli_stmt_execute($stmt);
 
-            // Atualiza email e senha no banco
-            $stmt = mysqli_prepare($conexao, "UPDATE usuario SET Email = ?, Senha = ? WHERE ID_usuario = ?");
-            mysqli_stmt_bind_param($stmt, "ssi", $novo_email, $hash_senha, $id_usuario);
+mysqli_stmt_bind_result(
+    $stmt,
+    $email,
+    $cpf,
+    $celular,
+    $senha_hash
+);
 
-            if (mysqli_stmt_execute($stmt)) {
-                $mensagem = "Email e senha atualizados com sucesso!";
-            } else {
-                $mensagem = "Erro ao atualizar dados: " . mysqli_error($conexao);
-            }
+mysqli_stmt_fetch($stmt);
+mysqli_stmt_close($stmt);
 
-            mysqli_stmt_close($stmt);
-        }
+
+// ===========================
+// ATUALIZAR DADOS
+// ===========================
+if (
+    $_SERVER["REQUEST_METHOD"] == "POST" &&
+    isset($_POST["acao"]) &&
+    $_POST["acao"] == "dados"
+) {
+
+    $novo_email = trim($_POST["email"]);
+    $novo_cpf = trim($_POST["cpf"]);
+    $novo_celular = trim($_POST["celular"]);
+    $senha_confirmacao = $_POST["senha_confirmacao"];
+
+    if (!password_verify($senha_confirmacao, $senha_hash)) {
+
+        $mensagem = "Senha incorreta.";
+
     } else {
-        $mensagem = "Preencha todos os campos!";
+
+        $sql = "
+        UPDATE usuario
+        SET
+            Email = ?,
+            CPF = ?,
+            Celular = ?
+        WHERE ID_usuario = ?";
+
+        $stmt = mysqli_prepare($conexao, $sql);
+
+        mysqli_stmt_bind_param(
+            $stmt,
+            "sssi",
+            $novo_email,
+            $novo_cpf,
+            $novo_celular,
+            $id_usuario
+        );
+
+        if (mysqli_stmt_execute($stmt)) {
+
+            $mensagem = "Dados atualizados com sucesso.";
+
+            $email = $novo_email;
+            $cpf = $novo_cpf;
+            $celular = $novo_celular;
+
+        } else {
+
+            $mensagem = "Erro ao atualizar dados.";
+        }
+
+        mysqli_stmt_close($stmt);
     }
 }
 
-// Busca email atual do usuário
-$stmt = mysqli_prepare($conexao, "SELECT Email FROM usuario WHERE ID_usuario = ?");
-mysqli_stmt_bind_param($stmt, "i", $id_usuario);
-mysqli_stmt_execute($stmt);
-mysqli_stmt_bind_result($stmt, $email_atual);
-mysqli_stmt_fetch($stmt);
-mysqli_stmt_close($stmt);
+
+// ===========================
+// ALTERAR SENHA
+// ===========================
+if (
+    $_SERVER["REQUEST_METHOD"] == "POST" &&
+    isset($_POST["acao"]) &&
+    $_POST["acao"] == "senha"
+) {
+
+    $senha_atual = $_POST["senha_atual"];
+    $nova_senha = $_POST["nova_senha"];
+    $confirmar_senha = $_POST["confirmar_senha"];
+
+    if (!password_verify($senha_atual, $senha_hash)) {
+
+        $mensagem = "Senha atual incorreta.";
+
+    } elseif ($nova_senha != $confirmar_senha) {
+
+        $mensagem = "As senhas não coincidem.";
+
+    } elseif (strlen($nova_senha) < 6) {
+
+        $mensagem = "A senha deve ter pelo menos 6 caracteres.";
+
+    } else {
+
+        $novo_hash = password_hash(
+            $nova_senha,
+            PASSWORD_DEFAULT
+        );
+
+        $sql = "
+        UPDATE usuario
+        SET Senha = ?
+        WHERE ID_usuario = ?";
+
+        $stmt = mysqli_prepare($conexao, $sql);
+
+        mysqli_stmt_bind_param(
+            $stmt,
+            "si",
+            $novo_hash,
+            $id_usuario
+        );
+
+        if (mysqli_stmt_execute($stmt)) {
+
+            $mensagem = "Senha alterada com sucesso.";
+
+        } else {
+
+            $mensagem = "Erro ao alterar senha.";
+        }
+
+        mysqli_stmt_close($stmt);
+    }
+}
 ?>
 
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Configuração do Usuário</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Configurações</title>
+
 <style>
+
 body{
-    font-family:Segoe UI;
     background:#111;
     color:#ffd700;
+    font-family:Arial,sans-serif;
+    margin:0;
     padding:20px;
 }
-form{
-    background:rgba(0,0,0,0.8);
-    padding:20px;
-    border-radius:10px;
-    max-width:400px;
+
+.container{
+    max-width:700px;
     margin:auto;
-    border:2px solid #ffd700;
 }
+
+.card{
+    background:#1a1a1a;
+    border:2px solid #ffd700;
+    border-radius:10px;
+    padding:20px;
+    margin-bottom:25px;
+}
+
+h1,h2{
+    text-align:center;
+}
+
+label{
+    display:block;
+    margin-top:10px;
+    margin-bottom:5px;
+}
+
 input{
     width:100%;
     padding:10px;
-    margin-bottom:10px;
     border:none;
     border-radius:5px;
-    outline:none;
+    box-sizing:border-box;
 }
+
 button{
     width:100%;
-    padding:10px;
-    background:#ffd700;
+    margin-top:15px;
+    padding:12px;
     border:none;
     border-radius:5px;
+    background:#ffd700;
+    color:#000;
     font-weight:bold;
     cursor:pointer;
 }
+
 button:hover{
     background:#fff;
-    color:#000;
 }
+
 .mensagem{
     text-align:center;
-    margin-bottom:10px;
-    color:#ffcc00;
+    color:white;
+    margin-bottom:20px;
 }
+
 </style>
 </head>
 <body>
 
-<h1 style="text-align:center;">Configuração do Usuário</h1>
+<div class="container">
 
-<?php if($mensagem != ""): ?>
-<p class="mensagem"><?= htmlspecialchars($mensagem) ?></p>
+<h1>Configurações da Conta</h1>
+
+<?php if(!empty($mensagem)): ?>
+<div class="mensagem">
+    <?php echo htmlspecialchars($mensagem); ?>
+</div>
 <?php endif; ?>
 
-<form method="post">
-    <label>Email:</label>
-    <input type="email" name="email" value="<?= htmlspecialchars($email_atual) ?>" required>
 
-    <label>Nova Senha:</label>
-    <input type="password" name="senha" placeholder="Digite a nova senha" required>
+<!-- DADOS CADASTRAIS -->
+<div class="card">
 
-    <button type="submit">Atualizar</button>
+<h2>Dados Cadastrais</h2>
+
+<form method="POST">
+
+<input type="hidden" name="acao" value="dados">
+
+<label>Email</label>
+<input
+type="email"
+name="email"
+value="<?php echo htmlspecialchars($email); ?>"
+required>
+
+<label>CPF</label>
+<input
+type="text"
+name="cpf"
+value="<?php echo htmlspecialchars($cpf); ?>">
+
+<label>Celular</label>
+<input
+type="text"
+name="celular"
+value="<?php echo htmlspecialchars($celular); ?>">
+
+<label>Confirme sua senha</label>
+<input
+type="password"
+name="senha_confirmacao"
+required>
+
+<button type="submit">
+Salvar Dados
+</button>
+
 </form>
+
+</div>
+
+
+<!-- ALTERAR SENHA -->
+<div class="card">
+
+<h2>Alterar Senha</h2>
+
+<form method="POST">
+
+<input type="hidden" name="acao" value="senha">
+
+<label>Senha Atual</label>
+<input
+type="password"
+name="senha_atual"
+required>
+
+<label>Nova Senha</label>
+<input
+type="password"
+name="nova_senha"
+required>
+
+<label>Confirmar Nova Senha</label>
+<input
+type="password"
+name="confirmar_senha"
+required>
+
+<button type="submit">
+Trocar Senha
+</button>
+
+</form>
+
+</div>
+
+</div>
 
 </body>
 </html>

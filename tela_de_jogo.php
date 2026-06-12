@@ -1,9 +1,59 @@
+<?php
+session_start();
+
+$host = "localhost";
+$user = "root";
+$pass = "";
+$db = "legends_games_1";
+
+$conn = new mysqli($host, $user, $pass, $db);
+$conn->set_charset("utf8");
+
+if ($conn->connect_error) {
+    die("Erro de conexão: " . $conn->connect_error);
+}
+
+// 1. Capturar o nome do jogo clicado vindo na URL
+$nomeJogo = isset($_GET['nome']) ? $_GET['nome'] : "ARK: Survival Evolved";
+
+// 2. Valores Padrão (Fallback de segurança caso o jogo não venha do banco de dados)
+$preco = "R$ 89,90";
+$nota = "4.7";
+$avaliacoes = "12.458";
+$categoria = "Sobrevivência";
+$descricao = "ARK é um jogo de sobrevivência com dinossauros em mundo aberto.";
+$ram = "8GB";
+$cpu = "i5";
+$gpu = "GTX 670";
+$img1 = "ark1.jpg";
+$img2 = "ark2.jpg";
+$img3 = "ark3.jpg";
+$video_url = "https://www.youtube.com/embed/5fIAPcVdZO8";
+
+// 3. Consulta para buscar dados dinâmicos da tabela 'jogos'
+$stmt = $conn->prepare("SELECT * FROM jogos WHERE nome = ?");
+if ($stmt) {
+    $stmt->bind_param("s", $nomeJogo);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows > 0) {
+        $jogoBanco = $result->fetch_assoc();
+        // Atualiza as variáveis se existirem colunas correspondentes na tabela do seu banco
+        if (isset($jogoBanco['preco'])) $preco = "R$ " . number_format($jogoBanco['preco'], 2, ',', '.');
+        if (isset($jogoBanco['nota'])) $nota = $jogoBanco['nota'];
+        if (isset($jogoBanco['img'])) $img1 = $jogoBanco['img']; 
+    }
+    $stmt->close();
+}
+?>
+
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ARK</title>
+<title><?= htmlspecialchars($nomeJogo); ?></title>
 
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -34,6 +84,8 @@ body{
     padding:10px 15px;
     border-radius:10px;
     cursor:pointer;
+    text-decoration: none;
+    font-size: 14px;
 }
 
 /* TITULO */
@@ -57,6 +109,7 @@ body{
     width:100%;
     height:420px;
     border-radius:15px;
+    border: none;
 }
 
 /* IMAGEM PRINCIPAL */
@@ -102,6 +155,9 @@ textarea{
     height:80px;
     border-radius:10px;
     padding:10px;
+    background: #1f2a36;
+    color: #fff;
+    border: 1px solid #333;
 }
 
 .btn{
@@ -110,6 +166,8 @@ textarea{
     padding:10px;
     border:none;
     border-radius:10px;
+    cursor: pointer;
+    font-weight: bold;
 }
 
 .card{
@@ -136,6 +194,7 @@ textarea{
     width:25%;
     height:120px;
     border-radius:10px;
+    object-fit: cover;
 }
 
 /* SIDEBAR */
@@ -163,6 +222,9 @@ textarea{
     text-align:center;
     border-radius:10px;
     margin:15px 0;
+    color: #000;
+    font-weight: bold;
+    cursor: pointer;
 }
 
 /* RODAPÉ */
@@ -194,73 +256,65 @@ textarea{
 <body>
 
 <div class="topo">
-<div class="logo">Lendas_Games</div>
-<div class="voltar" onclick="history.back()">⬅ Voltar</div>
+    <div class="logo">Lendas_Games</div>
+    <a href="tela_inicial.php" class="voltar">⬅ Voltar</a>
 </div>
 
-<h1 class="titulo">ARK: Survival Evolved</h1>
+<h1 class="titulo"><?= htmlspecialchars($nomeJogo); ?></h1>
 
 <div class="container">
 
-<!-- ESQUERDA -->
 <div>
 
 <div class="video">
-<iframe src="https://www.youtube.com/embed/5fIAPcVdZO8"></iframe>
+    <iframe src="<?= $video_url; ?>"></iframe>
 </div>
 
 <div class="imagem-principal">
-<img id="imgPrincipal" src="ark1.jpg">
+    <img id="imgPrincipal" src="<?= $img1; ?>">
 </div>
 
 <div class="galeria">
-<img src="ark1.jpg" onclick="trocar(this)">
-<img src="ark2.jpg" onclick="trocar(this)">
-<img src="ark3.jpg" onclick="trocar(this)">
+    <img src="<?= $img1; ?>" onclick="trocar(this)">
+    <img src="<?= $img2; ?>" onclick="trocar(this)">
+    <img src="<?= $img3; ?>" onclick="trocar(this)">
 </div>
 
 <div class="comentarios">
-<h2 style="color:gold;">Comentários</h2>
-
-<textarea id="txt"></textarea>
-<button class="btn" onclick="add()">Enviar</button>
-
-<div id="lista"></div>
+    <h2 style="color:gold;">Comentários</h2>
+    <textarea id="txt"></textarea>
+    <button class="btn" onclick="add()">Enviar</button>
+    <div id="lista"></div>
 </div>
 
 <div class="comunidade">
-<h2 style="color:gold;">Comunidade</h2>
-
-<div class="galeria-comunidade">
-<img src="com1.jpg">
-<img src="com2.jpg">
-<img src="com3.jpg">
-<img src="com4.jpg">
-</div>
-</div>
-
+    <h2 style="color:gold;">Comunidade</h2>
+    <div class="galeria-comunidade">
+        <img src="com1.jpg">
+        <img src="com2.jpg">
+        <img src="com3.jpg">
+        <img src="com4.jpg">
+    </div>
 </div>
 
-<!-- DIREITA -->
+</div>
+
 <div class="sidebar">
 
-<div class="preco">R$ 89,90</div>
+<div class="preco"><?= $preco; ?></div>
 
 <div class="estrelas">★★★★★</div>
-<p>4.7 (12.458 avaliações)</p>
+<p><?= $nota; ?> (<?= $avaliacoes; ?> avaliações)</p>
 
 <div class="botao">🛒 Comprar</div>
 
-<p><strong>Categoria:</strong> Sobrevivência</p>
+<p><strong>Categoria:</strong> <?= $categoria; ?></p>
+<p style="margin-top: 10px; color: #eee;"><?= $descricao; ?></p>
 
-<p>
-ARK é um jogo de sobrevivência com dinossauros em mundo aberto.
-</p>
-
-<h3 style="color:gold;">Requisitos</h3>
-<p>RAM: 8GB</p>
-<p>CPU: i5</p>
-<p>GPU: GTX 670</p>
+<h3 style="color:gold; margin-top: 30px;">Requisitos</h3>
+<p>RAM: <?= $ram; ?></p>
+<p>CPU: <?= $cpu; ?></p>
+<p>GPU: <?= $gpu; ?></p>
 
 </div>
 
@@ -268,40 +322,36 @@ ARK é um jogo de sobrevivência com dinossauros em mundo aberto.
 
 <footer class="rodape">
 <div class="rodape-container">
-
-<div>
-<h3>Lendas_Games</h3>
-<p>Explore novos mundos.</p>
-</div>
-
-<div>
-<p>Loja</p>
-<p>Biblioteca</p>
-</div>
-
-<div>
-<p>Suporte</p>
-<p>© 2026</p>
-</div>
-
+    <div>
+        <h3>Lendas_Games</h3>
+        <p>Explore novos mundos.</p>
+    </div>
+    <div>
+        <p>Loja</p>
+        <p>Biblioteca</p>
+    </div>
+    <div>
+        <p>Suporte</p>
+        <p>© 2026</p>
+    </div>
 </div>
 </footer>
 
 <script>
 function trocar(img){
-document.getElementById("imgPrincipal").src = img.src;
+    document.getElementById("imgPrincipal").src = img.src;
 }
 
 function add(){
-let t = document.getElementById("txt").value;
-if(t=="") return;
+    let t = document.getElementById("txt").value;
+    if(t=="") return;
 
-let d = document.createElement("div");
-d.className="card";
-d.innerHTML=`<div class="nome">Usuário</div><div>${t}</div><div class="tempo">agora</div>`;
+    let d = document.createElement("div");
+    d.className="card";
+    d.innerHTML=`<div class="nome">Usuário</div><div>${t}</div><div class="tempo">agora</div>`;
 
-document.getElementById("lista").prepend(d);
-document.getElementById("txt").value="";
+    document.getElementById("lista").prepend(d);
+    document.getElementById("txt").value="";
 }
 </script>
 

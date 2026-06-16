@@ -323,7 +323,7 @@ textarea{
 <footer class="rodape">
 <div class="rodape-container">
     <div>
-        <h3>Lendas_Games</h3>
+        <h3>Legends_Games</h3>
         <p>Explore novos mundos.</p>
     </div>
     <div>

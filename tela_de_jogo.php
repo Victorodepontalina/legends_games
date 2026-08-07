@@ -7,7 +7,7 @@ $pass = "";
 $db = "legends_games_1";
 
 $conn = new mysqli($host, $user, $pass, $db);
-$conn->set_charset("utf8");
+$conn->set_charset("utf8mb4");
 
 if ($conn->connect_error) {
     die("Erro de conexão: " . $conn->connect_error);
@@ -16,12 +16,13 @@ if ($conn->connect_error) {
 // 1. Capturar o nome do jogo clicado vindo na URL
 $nomeJogo = isset($_GET['nome']) ? $_GET['nome'] : "ARK: Survival Evolved";
 
-// 2. Valores Padrão (Fallback de segurança caso o jogo não venha do banco de dados)
+// 2. Valores Padrão (Fallback caso o jogo não exista no banco)
 $preco = "R$ 89,90";
 $nota = "4.7";
 $avaliacoes = "12.458";
-$categoria = "Sobrevivência";
+$categoria = "Ação / Aventura";
 $descricao = "ARK é um jogo de sobrevivência com dinossauros em mundo aberto.";
+$classificacao = "+12";
 $ram = "8GB";
 $cpu = "i5";
 $gpu = "GTX 670";
@@ -30,8 +31,11 @@ $img2 = "ark2.jpg";
 $img3 = "ark3.jpg";
 $video_url = "https://www.youtube.com/embed/5fIAPcVdZO8";
 
-// 3. Consulta para buscar dados dinâmicos da tabela 'jogos'
-$stmt = $conn->prepare("SELECT * FROM jogos WHERE nome = ?");
+// 3. Consulta direta apenas na tabela 'jogo'
+$sql = "SELECT * FROM jogo WHERE Nome = ?";
+
+$stmt = $conn->prepare($sql);
+
 if ($stmt) {
     $stmt->bind_param("s", $nomeJogo);
     $stmt->execute();
@@ -39,10 +43,22 @@ if ($stmt) {
     
     if ($result->num_rows > 0) {
         $jogoBanco = $result->fetch_assoc();
-        // Atualiza as variáveis se existirem colunas correspondentes na tabela do seu banco
-        if (isset($jogoBanco['preco'])) $preco = "R$ " . number_format($jogoBanco['preco'], 2, ',', '.');
-        if (isset($jogoBanco['nota'])) $nota = $jogoBanco['nota'];
-        if (isset($jogoBanco['img'])) $img1 = $jogoBanco['img']; 
+        
+        if (!empty($jogoBanco['Preco_Unitario'])) {
+            $preco = "R$ " . number_format($jogoBanco['Preco_Unitario'], 2, ',', '.');
+        }
+        if (!empty($jogoBanco['Descricao'])) {
+            $descricao = $jogoBanco['Descricao'];
+        }
+        if (!empty($jogoBanco['Video_Demonstrativo'])) {
+            $video_url = $jogoBanco['Video_Demonstrativo'];
+        }
+        if (!empty($jogoBanco['Capa'])) {
+            $img1 = $jogoBanco['Capa'];
+        }
+        if (!empty($jogoBanco['Classificacao_Etaria'])) {
+            $classificacao = "+" . $jogoBanco['Classificacao_Etaria'];
+        }
     }
     $stmt->close();
 }
@@ -59,7 +75,7 @@ if ($stmt) {
 *{margin:0;padding:0;box-sizing:border-box;}
 
 body{
-    font-family:Arial;
+    font-family:Arial, sans-serif;
     background:radial-gradient(circle at top,#1b2838,#05070a);
     color:#fff;
 }
@@ -70,12 +86,14 @@ body{
     padding:25px 50px;
     display:flex;
     justify-content:space-between;
+    align-items: center;
     border-bottom:2px solid gold;
 }
 
 .logo{
     color:gold;
     font-size:30px;
+    font-weight: bold;
 }
 
 .voltar{
@@ -135,11 +153,12 @@ body{
     border-radius:10px;
     cursor:pointer;
     opacity:0.7;
+    transition: 0.3s;
 }
 
 .galeria img:hover{
     opacity:1;
-    transform:scale(1.05);
+    transform:scale(1.03);
 }
 
 /* COMENTARIOS */
@@ -158,12 +177,13 @@ textarea{
     background: #1f2a36;
     color: #fff;
     border: 1px solid #333;
+    resize: none;
 }
 
 .btn{
     margin-top:10px;
     background:gold;
-    padding:10px;
+    padding:10px 20px;
     border:none;
     border-radius:10px;
     cursor: pointer;
@@ -202,11 +222,13 @@ textarea{
     background:#14181f;
     padding:25px;
     border-radius:15px;
+    height: fit-content;
 }
 
 .preco{
     font-size:28px;
     color:gold;
+    font-weight: bold;
 }
 
 /* AVALIAÇÃO */
@@ -246,9 +268,9 @@ textarea{
 .rodape h3{color:gold;}
 
 @media(max-width:900px){
-.container{
-    grid-template-columns:1fr;
-}
+    .container{
+        grid-template-columns:1fr;
+    }
 }
 </style>
 </head>
@@ -267,28 +289,28 @@ textarea{
 <div>
 
 <div class="video">
-    <iframe src="<?= $video_url; ?>"></iframe>
+    <iframe src="<?= htmlspecialchars($video_url); ?>"></iframe>
 </div>
 
 <div class="imagem-principal">
-    <img id="imgPrincipal" src="<?= $img1; ?>">
+    <img id="imgPrincipal" src="<?= htmlspecialchars($img1); ?>">
 </div>
 
 <div class="galeria">
-    <img src="<?= $img1; ?>" onclick="trocar(this)">
-    <img src="<?= $img2; ?>" onclick="trocar(this)">
-    <img src="<?= $img3; ?>" onclick="trocar(this)">
+    <img src="<?= htmlspecialchars($img1); ?>" onclick="trocar(this)">
+    <img src="<?= htmlspecialchars($img2); ?>" onclick="trocar(this)">
+    <img src="<?= htmlspecialchars($img3); ?>" onclick="trocar(this)">
 </div>
 
 <div class="comentarios">
-    <h2 style="color:gold;">Comentários</h2>
-    <textarea id="txt"></textarea>
+    <h2 style="color:gold; margin-bottom: 10px;">Comentários</h2>
+    <textarea id="txt" placeholder="Escreva seu comentário..."></textarea>
     <button class="btn" onclick="add()">Enviar</button>
     <div id="lista"></div>
 </div>
 
 <div class="comunidade">
-    <h2 style="color:gold;">Comunidade</h2>
+    <h2 style="color:gold; margin-bottom: 10px;">Comunidade</h2>
     <div class="galeria-comunidade">
         <img src="com1.jpg">
         <img src="com2.jpg">
@@ -301,20 +323,21 @@ textarea{
 
 <div class="sidebar">
 
-<div class="preco"><?= $preco; ?></div>
+<div class="preco"><?= htmlspecialchars($preco); ?></div>
 
 <div class="estrelas">★★★★★</div>
-<p><?= $nota; ?> (<?= $avaliacoes; ?> avaliações)</p>
+<p><?= htmlspecialchars($nota); ?> (<?= htmlspecialchars($avaliacoes); ?> avaliações)</p>
 
 <div class="botao">🛒 Comprar</div>
 
-<p><strong>Categoria:</strong> <?= $categoria; ?></p>
-<p style="margin-top: 10px; color: #eee;"><?= $descricao; ?></p>
+<p><strong>Categoria:</strong> <?= htmlspecialchars($categoria); ?></p>
+<p style="margin-top: 5px;"><strong>Classificação:</strong> <?= htmlspecialchars($classificacao); ?></p>
+<p style="margin-top: 15px; color: #eee;"><?= htmlspecialchars($descricao); ?></p>
 
 <h3 style="color:gold; margin-top: 30px;">Requisitos</h3>
-<p>RAM: <?= $ram; ?></p>
-<p>CPU: <?= $cpu; ?></p>
-<p>GPU: <?= $gpu; ?></p>
+<p>RAM: <?= htmlspecialchars($ram); ?></p>
+<p>CPU: <?= htmlspecialchars($cpu); ?></p>
+<p>GPU: <?= htmlspecialchars($gpu); ?></p>
 
 </div>
 
@@ -343,15 +366,15 @@ function trocar(img){
 }
 
 function add(){
-    let t = document.getElementById("txt").value;
-    if(t=="") return;
+    let t = document.getElementById("txt").value.trim();
+    if(t == "") return;
 
     let d = document.createElement("div");
-    d.className="card";
-    d.innerHTML=`<div class="nome">Usuário</div><div>${t}</div><div class="tempo">agora</div>`;
+    d.className = "card";
+    d.innerHTML = `<div class="nome">Usuário</div><div>${t}</div><div class="tempo">agora</div>`;
 
     document.getElementById("lista").prepend(d);
-    document.getElementById("txt").value="";
+    document.getElementById("txt").value = "";
 }
 </script>
 

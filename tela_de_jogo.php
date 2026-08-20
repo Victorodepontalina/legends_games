@@ -1,382 +1,1120 @@
 <?php
+
 session_start();
 
-$host = "localhost";
-$user = "root";
-$pass = "";
-$db = "legends_games_1";
+/* =========================
+   JOGOS
+========================= */
 
-$conn = new mysqli($host, $user, $pass, $db);
-$conn->set_charset("utf8mb4");
+$jogos = [
 
-if ($conn->connect_error) {
-    die("Erro de conexão: " . $conn->connect_error);
+    "Minecraft" => [
+        "99.90",
+        "4.8",
+        "Sobrevivência",
+        [
+            "imagens/minecraft_jogo.jpg",
+            "imagens/minecraft2.jpg",
+            "imagens/minecraft3.jpg"
+        ],
+        "https://www.youtube.com/embed/MmB9b5njVbA"
+    ],
+
+    "Red Dead Redemption 2" => [
+        "282.90",
+        "5.0",
+        "Ação / Aventura",
+        [
+            "imagens/red_dead_redemption_2.jpg",
+            "imagens/red_dead2.jpg",
+            "imagens/red_dead3.jpg"
+        ],
+        "https://www.youtube.com/embed/eaW0tYpxyp0"
+    ],
+
+    "Elden Ring" => [
+        "320.99",
+        "4.5",
+        "RPG / Ação",
+        [
+            "imagens/Elden_Ring.jpg",
+            "imagens/elden_ring2.jpg",
+            "imagens/elden_ring3.jpg"
+        ],
+        "https://www.youtube.com/embed/E3Huy2cdih0"
+    ],
+
+    "Cyberpunk 2077" => [
+        "349.90",
+        "4.8",
+        "RPG / Ação",
+        [
+            "imagens/cyberpunk.jpg",
+            "imagens/cyberpunk2.jpg",
+            "imagens/cyberpunk3.jpg"
+        ],
+        "https://www.youtube.com/embed/8X2kIfS6fb8"
+    ],
+
+    "Call of Duty: Warzone" => [
+        "349.90",
+        "4.8",
+        "FPS",
+        [
+            "imagens/Call_of_Duty.jpg",
+            "imagens/cod2.jpg",
+            "imagens/cod3.jpg"
+        ],
+        "https://www.youtube.com/embed/0E44DClsX5Q"
+    ],
+
+    "Call of Duty: Warzone 3" => [
+        "349.90",
+        "4.8",
+        "FPS",
+        [
+            "imagens/Call_of_duty_3.png",
+            "imagens/cod_warzone3_2.jpg",
+            "imagens/cod_warzone3_3.jpg"
+        ],
+        "https://www.youtube.com/embed/0E44DClsX5Q"
+    ],
+
+    "DOOM Eternal" => [
+        "219.90",
+        "4.9",
+        "FPS / Ação",
+        [
+            "imagens/Dom.jpg",
+            "imagens/doom2.jpg",
+            "imagens/doom3.jpg"
+        ],
+        "https://www.youtube.com/embed/_UuktemkCFI"
+    ],
+
+    "God Of War: Ragnarock" => [
+        "159.90",
+        "4.5",
+        "Ação / Aventura",
+        [
+            "imagens/god_of_war.jpg",
+            "imagens/god2.jpg",
+            "imagens/god3.jpg"
+        ],
+        "https://www.youtube.com/embed/EE-4GvjKcfs"
+    ],
+
+    "Hades" => [
+        "139.90",
+        "4.6",
+        "Roguelike",
+        [
+            "imagens/Hades.jpg",
+            "imagens/hades2.jpg",
+            "imagens/hades3.jpg"
+        ],
+        "https://www.youtube.com/embed/Bz8l935Bv0Y"
+    ],
+
+    "Horizon Forbidden West" => [
+        "199.90",
+        "4.8",
+        "Ação / Aventura",
+        [
+            "imagens/horizon.jpg",
+            "imagens/horizon2.jpg",
+            "imagens/horizon3.jpg"
+        ],
+        "https://www.youtube.com/embed/Lq594XmpPBg"
+    ],
+
+    "No Man's Sky" => [
+        "119.90",
+        "4.4",
+        "Exploração",
+        [
+            "imagens/não_sei.jpg",
+            "imagens/no_mans_sky2.jpg",
+            "imagens/no_mans_sky3.jpg"
+        ],
+        "https://www.youtube.com/embed/nLtmEjqzg7M"
+    ],
+
+    "Resident Evil 4" => [
+        "179.90",
+        "4.7",
+        "Terror / Ação",
+        [
+            "imagens/Resident_Evil_4.jpg",
+            "imagens/resident4_2.jpg",
+            "imagens/resident4_3.jpg"
+        ],
+        "https://www.youtube.com/embed/Id2EaldBaWw"
+    ]
+];
+
+
+/* =========================
+   PEGAR NOME DO JOGO
+========================= */
+
+$nome = $_GET['nome'] ?? "Minecraft";
+
+if (!isset($jogos[$nome])) {
+    $nome = "Minecraft";
 }
 
-// 1. Capturar o nome do jogo clicado vindo na URL
-$nomeJogo = isset($_GET['nome']) ? $_GET['nome'] : "ARK: Survival Evolved";
+$jogo = $jogos[$nome];
 
-// 2. Valores Padrão (Fallback caso o jogo não exista no banco)
-$preco = "R$ 89,90";
-$nota = "4.7";
-$avaliacoes = "12.458";
-$categoria = "Ação / Aventura";
-$descricao = "ARK é um jogo de sobrevivência com dinossauros em mundo aberto.";
-$classificacao = "+12";
-$ram = "8GB";
-$cpu = "i5";
-$gpu = "GTX 670";
-$img1 = "ark1.jpg";
-$img2 = "ark2.jpg";
-$img3 = "ark3.jpg";
-$video_url = "https://www.youtube.com/embed/5fIAPcVdZO8";
+$preco = $jogo[0];
+$nota = $jogo[1];
+$categoria = $jogo[2];
+$imagens = $jogo[3];
+$video = $jogo[4];
 
-// 3. Consulta direta apenas na tabela 'jogo'
-$sql = "SELECT * FROM jogo WHERE Nome = ?";
-
-$stmt = $conn->prepare($sql);
-
-if ($stmt) {
-    $stmt->bind_param("s", $nomeJogo);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    if ($result->num_rows > 0) {
-        $jogoBanco = $result->fetch_assoc();
-        
-        if (!empty($jogoBanco['Preco_Unitario'])) {
-            $preco = "R$ " . number_format($jogoBanco['Preco_Unitario'], 2, ',', '.');
-        }
-        if (!empty($jogoBanco['Descricao'])) {
-            $descricao = $jogoBanco['Descricao'];
-        }
-        if (!empty($jogoBanco['Video_Demonstrativo'])) {
-            $video_url = $jogoBanco['Video_Demonstrativo'];
-        }
-        if (!empty($jogoBanco['Capa'])) {
-            $img1 = $jogoBanco['Capa'];
-        }
-        if (!empty($jogoBanco['Classificacao_Etaria'])) {
-            $classificacao = "+" . $jogoBanco['Classificacao_Etaria'];
-        }
-    }
-    $stmt->close();
-}
 ?>
 
 <!DOCTYPE html>
 <html lang="pt-br">
+
 <head>
+
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><?= htmlspecialchars($nomeJogo); ?></title>
+
+<meta name="viewport"
+      content="width=device-width, initial-scale=1.0">
+
+<title>
+    <?= htmlspecialchars($nome) ?> - Legends Games
+</title>
 
 <style>
-*{margin:0;padding:0;box-sizing:border-box;}
 
-body{
-    font-family:Arial, sans-serif;
-    background:radial-gradient(circle at top,#1b2838,#05070a);
-    color:#fff;
+* {
+    box-sizing: border-box;
 }
 
-/* TOPO */
-.topo{
-    background:#0d0f13;
-    padding:25px 50px;
-    display:flex;
-    justify-content:space-between;
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+
+    background: radial-gradient(
+        circle at top,
+        #1b2838,
+        #05070a
+    );
+
+    color: white;
+}
+
+
+/* =========================
+   TOPO
+========================= */
+
+header {
+
+    padding: 20px;
+
+    background: #0d0f13;
+
+    border-bottom: 2px solid gold;
+
+    display: flex;
+
+    justify-content: space-between;
+
     align-items: center;
-    border-bottom:2px solid gold;
 }
 
-.logo{
-    color:gold;
-    font-size:30px;
+.logo {
+
+    color: gold;
+
+    font-size: 28px;
+
     font-weight: bold;
 }
 
-.voltar{
-    background:#1a1f26;
-    color:gold;
-    padding:10px 15px;
-    border-radius:10px;
-    cursor:pointer;
+.voltar {
+
+    color: gold;
+
     text-decoration: none;
-    font-size: 14px;
+
+    background: #222;
+
+    padding: 10px 15px;
+
+    border-radius: 8px;
 }
 
-/* TITULO */
-.titulo{
-    font-size:50px;
-    color:gold;
-    margin:40px;
+.voltar:hover {
+
+    background: gold;
+
+    color: black;
 }
 
-/* LAYOUT */
-.container{
-    width:90%;
-    margin:auto;
-    display:grid;
-    grid-template-columns:2fr 1fr;
-    gap:50px;
+
+/* =========================
+   TITULO
+========================= */
+
+h1 {
+
+    width: 90%;
+
+    margin: 35px auto;
+
+    color: gold;
+
+    font-size: 40px;
 }
 
-/* VIDEO */
-.video iframe{
-    width:100%;
-    height:420px;
-    border-radius:15px;
-    border: none;
+
+/* =========================
+   CONTAINER
+========================= */
+
+.container {
+
+    width: 90%;
+
+    margin: auto;
+
+    display: grid;
+
+    grid-template-columns: 2fr 1fr;
+
+    gap: 30px;
 }
 
-/* IMAGEM PRINCIPAL */
-.imagem-principal img{
-    width:100%;
-    height:400px;
-    object-fit:cover;
-    border-radius:15px;
-    margin-top:20px;
+
+/* =========================
+   GALERIA
+========================= */
+
+.galeria {
+
+    position: relative;
+
+    width: 100%;
+
+    height: 500px;
+
+    background: #000;
+
+    border-radius: 15px;
+
+    overflow: hidden;
 }
 
-/* GALERIA */
-.galeria{
-    display:flex;
-    gap:10px;
-    margin-top:15px;
+.slide {
+
+    display: none;
+
+    width: 100%;
+
+    height: 100%;
 }
 
-.galeria img{
-    width:33%;
-    height:120px;
-    object-fit:cover;
-    border-radius:10px;
-    cursor:pointer;
-    opacity:0.7;
-    transition: 0.3s;
+.slide.ativo {
+
+    display: block;
 }
 
-.galeria img:hover{
-    opacity:1;
-    transform:scale(1.03);
-}
+.slide img {
 
-/* COMENTARIOS */
-.comentarios{
-    margin-top:40px;
-    background:#14181f;
-    padding:20px;
-    border-radius:15px;
-}
+    width: 100%;
 
-textarea{
-    width:100%;
-    height:80px;
-    border-radius:10px;
-    padding:10px;
-    background: #1f2a36;
-    color: #fff;
-    border: 1px solid #333;
-    resize: none;
-}
+    height: 100%;
 
-.btn{
-    margin-top:10px;
-    background:gold;
-    padding:10px 20px;
-    border:none;
-    border-radius:10px;
-    cursor: pointer;
-    font-weight: bold;
-}
-
-.card{
-    background:#1f2a36;
-    padding:10px;
-    margin-top:10px;
-    border-radius:10px;
-}
-
-.nome{color:gold;}
-.tempo{font-size:12px;color:#aaa;}
-
-/* COMUNIDADE */
-.comunidade{
-    margin-top:40px;
-}
-
-.galeria-comunidade{
-    display:flex;
-    gap:10px;
-}
-
-.galeria-comunidade img{
-    width:25%;
-    height:120px;
-    border-radius:10px;
     object-fit: cover;
 }
 
-/* SIDEBAR */
-.sidebar{
-    background:#14181f;
-    padding:25px;
-    border-radius:15px;
-    height: fit-content;
+.slide iframe {
+
+    width: 100%;
+
+    height: 100%;
+
+    border: 0;
 }
 
-.preco{
-    font-size:28px;
-    color:gold;
+
+/* =========================
+   SETAS
+========================= */
+
+.seta {
+
+    position: absolute;
+
+    top: 50%;
+
+    transform: translateY(-50%);
+
+    width: 50px;
+
+    height: 70px;
+
+    background: rgba(0,0,0,.75);
+
+    color: gold;
+
+    border: 0;
+
+    font-size: 35px;
+
+    cursor: pointer;
+
+    z-index: 10;
+}
+
+.seta:hover {
+
+    background: gold;
+
+    color: black;
+}
+
+.esquerda {
+
+    left: 10px;
+}
+
+.direita {
+
+    right: 10px;
+}
+
+
+/* =========================
+   CONTADOR
+========================= */
+
+.contador {
+
+    position: absolute;
+
+    bottom: 15px;
+
+    left: 50%;
+
+    transform: translateX(-50%);
+
+    background: rgba(0,0,0,.8);
+
+    color: gold;
+
+    padding: 8px 15px;
+
+    border-radius: 20px;
+
+    z-index: 10;
+}
+
+
+/* =========================
+   MINIATURAS
+========================= */
+
+.miniaturas {
+
+    display: flex;
+
+    gap: 10px;
+
+    margin-top: 15px;
+
+    overflow-x: auto;
+}
+
+.miniatura {
+
+    width: 120px;
+
+    height: 70px;
+
+    object-fit: cover;
+
+    border-radius: 8px;
+
+    cursor: pointer;
+
+    opacity: .6;
+
+    border: 2px solid transparent;
+
+    flex-shrink: 0;
+}
+
+.miniatura:hover,
+.miniatura.selecionada {
+
+    opacity: 1;
+
+    border-color: gold;
+}
+
+
+/* =========================
+   BOX DE INFORMAÇÕES
+========================= */
+
+.box {
+
+    background: #14181f;
+
+    padding: 25px;
+
+    border-radius: 15px;
+
+    height: max-content;
+}
+
+.preco {
+
+    color: gold;
+
+    font-size: 30px;
+
     font-weight: bold;
 }
 
-/* AVALIAÇÃO */
-.estrelas{
-    color:gold;
-    font-size:20px;
+.estrelas {
+
+    color: gold;
+
+    font-size: 22px;
+
+    margin: 10px 0;
 }
 
-/* BOTÃO */
-.botao{
-    background:gold;
-    padding:12px;
-    text-align:center;
-    border-radius:10px;
-    margin:15px 0;
-    color: #000;
+
+/* =========================
+   BOTÃO COMPRAR
+========================= */
+
+.comprar {
+
+    display: block;
+
+    text-align: center;
+
+    background: gold;
+
+    color: black;
+
+    padding: 14px;
+
+    margin: 20px 0;
+
+    border-radius: 10px;
+
+    text-decoration: none;
+
     font-weight: bold;
+
     cursor: pointer;
 }
 
-/* RODAPÉ */
-.rodape{
-    margin-top:60px;
-    background:#0d0f13;
-    border-top:2px solid gold;
-    padding:40px;
+.comprar:hover {
+
+    background: white;
 }
 
-.rodape-container{
-    display:flex;
-    justify-content:space-between;
-    width:90%;
-    margin:auto;
-    color:#ccc;
+
+/* =========================
+   BOTÃO CARRINHO
+========================= */
+
+.ver-carrinho {
+
+    display: block;
+
+    text-align: center;
+
+    background: #222;
+
+    color: gold;
+
+    border: 1px solid gold;
+
+    padding: 12px;
+
+    border-radius: 10px;
+
+    text-decoration: none;
+
+    font-weight: bold;
 }
 
-.rodape h3{color:gold;}
+.ver-carrinho:hover {
 
-@media(max-width:900px){
-    .container{
-        grid-template-columns:1fr;
+    background: gold;
+
+    color: black;
+}
+
+
+/* =========================
+   COMENTÁRIOS
+========================= */
+
+.comentarios {
+
+    width: 90%;
+
+    margin: 30px auto;
+
+    background: #14181f;
+
+    padding: 20px;
+
+    border-radius: 15px;
+}
+
+textarea {
+
+    width: 100%;
+
+    height: 80px;
+
+    background: #222;
+
+    color: white;
+
+    border: 1px solid #444;
+
+    padding: 10px;
+
+    border-radius: 8px;
+
+    resize: none;
+}
+
+button.enviar {
+
+    margin-top: 10px;
+
+    padding: 10px 20px;
+
+    background: gold;
+
+    border: 0;
+
+    border-radius: 8px;
+
+    font-weight: bold;
+
+    cursor: pointer;
+}
+
+.comentario {
+
+    background: #222;
+
+    padding: 10px;
+
+    margin-top: 10px;
+
+    border-radius: 8px;
+}
+
+.comentario b {
+
+    color: gold;
+}
+
+
+/* =========================
+   RESPONSIVO
+========================= */
+
+@media(max-width: 800px) {
+
+    .container {
+
+        grid-template-columns: 1fr;
+    }
+
+    .galeria {
+
+        height: 350px;
+    }
+
+    h1 {
+
+        font-size: 30px;
     }
 }
+
 </style>
+
 </head>
+
 
 <body>
 
-<div class="topo">
-    <div class="logo">Lendas_Games</div>
-    <a href="tela_inicial.php" class="voltar">⬅ Voltar</a>
-</div>
 
-<h1 class="titulo"><?= htmlspecialchars($nomeJogo); ?></h1>
+<header>
+
+    <div class="logo">
+        Legends_Games
+    </div>
+
+    <a
+        href="tela_inicial.php"
+        class="voltar"
+    >
+        ⬅ Voltar
+    </a>
+
+</header>
+
+
+<h1>
+
+    <?= htmlspecialchars($nome) ?>
+
+</h1>
+
 
 <div class="container">
 
-<div>
 
-<div class="video">
-    <iframe src="<?= htmlspecialchars($video_url); ?>"></iframe>
+    <!-- =========================
+         GALERIA
+    ========================= -->
+
+    <div>
+
+        <div class="galeria">
+
+
+            <?php foreach($imagens as $i => $imagem): ?>
+
+                <div
+                    class="slide <?= $i == 0 ? 'ativo' : '' ?>"
+                >
+
+                    <img
+                        src="<?= htmlspecialchars($imagem) ?>"
+
+                        onerror="
+                            this.src='https://via.placeholder.com/800x500/111111/FFD700?text=Imagem+nao+encontrada'
+                        "
+                    >
+
+                </div>
+
+            <?php endforeach; ?>
+
+
+            <!-- VÍDEO -->
+
+            <div class="slide">
+
+                <iframe
+                    src="<?= htmlspecialchars($video) ?>"
+                    allowfullscreen>
+                </iframe>
+
+            </div>
+
+
+            <!-- SETA ESQUERDA -->
+
+            <button
+                class="seta esquerda"
+                onclick="anterior()"
+            >
+                ❮
+            </button>
+
+
+            <!-- SETA DIREITA -->
+
+            <button
+                class="seta direita"
+                onclick="proximo()"
+            >
+                ❯
+            </button>
+
+
+            <!-- CONTADOR -->
+
+            <div
+                class="contador"
+                id="contador"
+            >
+                1 / <?= count($imagens) + 1 ?>
+            </div>
+
+        </div>
+
+
+        <!-- =========================
+             MINIATURAS
+        ========================= -->
+
+        <div class="miniaturas">
+
+
+            <?php foreach($imagens as $i => $imagem): ?>
+
+                <img
+                    class="miniatura <?= $i == 0 ? 'selecionada' : '' ?>"
+
+                    src="<?= htmlspecialchars($imagem) ?>"
+
+                    onclick="irPara(<?= $i ?>)"
+                >
+
+            <?php endforeach; ?>
+
+
+            <!-- MINIATURA VÍDEO -->
+
+            <div
+                class="miniatura"
+
+                onclick="irPara(<?= count($imagens) ?>)"
+
+                style="
+                    background:#111;
+                    color:gold;
+                    display:flex;
+                    align-items:center;
+                    justify-content:center;
+                    font-weight:bold;
+                "
+            >
+
+                ▶ VÍDEO
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- =========================
+         INFORMAÇÕES
+    ========================= -->
+
+    <div class="box">
+
+
+        <div class="preco">
+
+            R$
+
+            <?= number_format(
+                $preco,
+                2,
+                ',',
+                '.'
+            ) ?>
+
+        </div>
+
+
+        <div class="estrelas">
+
+            ★★★★★
+
+        </div>
+
+
+        <p>
+
+            ⭐ Nota:
+            <?= htmlspecialchars($nota) ?>
+
+        </p>
+
+
+        <!-- =========================
+             COMPRAR
+        ========================= -->
+
+        <a
+            class="comprar"
+
+            href="carrinho.php?adicionar=1&nome=<?= urlencode($nome) ?>&preco=<?= urlencode($preco) ?>&img=<?= urlencode($imagens[0]) ?>"
+        >
+
+            🛒 Comprar
+
+        </a>
+
+
+        <!-- =========================
+             VER CARRINHO
+        ========================= -->
+
+        <a
+            href="carrinho.php"
+            class="ver-carrinho"
+        >
+
+            🛒 Ver meu carrinho
+
+        </a>
+
+
+        <p>
+
+            <b>Categoria:</b>
+
+            <?= htmlspecialchars($categoria) ?>
+
+        </p>
+
+
+        <p>
+
+            Aproveite
+            <b><?= htmlspecialchars($nome) ?></b>
+            na Legends_Games!
+
+        </p>
+
+
+        <hr>
+
+
+        <h3 style="color:gold">
+
+            🎮 Sobre o jogo
+
+        </h3>
+
+
+        <p>
+
+            Explore o mundo de
+            <?= htmlspecialchars($nome) ?>,
+            enfrente desafios e aproveite
+            uma experiência incrível.
+
+        </p>
+
+
+    </div>
+
 </div>
 
-<div class="imagem-principal">
-    <img id="imgPrincipal" src="<?= htmlspecialchars($img1); ?>">
-</div>
 
-<div class="galeria">
-    <img src="<?= htmlspecialchars($img1); ?>" onclick="trocar(this)">
-    <img src="<?= htmlspecialchars($img2); ?>" onclick="trocar(this)">
-    <img src="<?= htmlspecialchars($img3); ?>" onclick="trocar(this)">
-</div>
+<!-- =========================
+     COMENTÁRIOS
+========================= -->
 
 <div class="comentarios">
-    <h2 style="color:gold; margin-bottom: 10px;">Comentários</h2>
-    <textarea id="txt" placeholder="Escreva seu comentário..."></textarea>
-    <button class="btn" onclick="add()">Enviar</button>
+
+
+    <h2 style="color:gold">
+
+        💬 Comentários
+
+    </h2>
+
+
+    <textarea
+        id="texto"
+        placeholder="Escreva um comentário..."
+    ></textarea>
+
+
+    <br>
+
+
+    <button
+        class="enviar"
+        onclick="comentar()"
+    >
+
+        Enviar
+
+    </button>
+
+
     <div id="lista"></div>
-</div>
 
-<div class="comunidade">
-    <h2 style="color:gold; margin-bottom: 10px;">Comunidade</h2>
-    <div class="galeria-comunidade">
-        <img src="com1.jpg">
-        <img src="com2.jpg">
-        <img src="com3.jpg">
-        <img src="com4.jpg">
-    </div>
-</div>
 
 </div>
 
-<div class="sidebar">
-
-<div class="preco"><?= htmlspecialchars($preco); ?></div>
-
-<div class="estrelas">★★★★★</div>
-<p><?= htmlspecialchars($nota); ?> (<?= htmlspecialchars($avaliacoes); ?> avaliações)</p>
-
-<div class="botao">🛒 Comprar</div>
-
-<p><strong>Categoria:</strong> <?= htmlspecialchars($categoria); ?></p>
-<p style="margin-top: 5px;"><strong>Classificação:</strong> <?= htmlspecialchars($classificacao); ?></p>
-<p style="margin-top: 15px; color: #eee;"><?= htmlspecialchars($descricao); ?></p>
-
-<h3 style="color:gold; margin-top: 30px;">Requisitos</h3>
-<p>RAM: <?= htmlspecialchars($ram); ?></p>
-<p>CPU: <?= htmlspecialchars($cpu); ?></p>
-<p>GPU: <?= htmlspecialchars($gpu); ?></p>
-
-</div>
-
-</div>
-
-<footer class="rodape">
-<div class="rodape-container">
-    <div>
-        <h3>Legends_Games</h3>
-        <p>Explore novos mundos.</p>
-    </div>
-    <div>
-        <p>Loja</p>
-        <p>Biblioteca</p>
-    </div>
-    <div>
-        <p>Suporte</p>
-        <p>© 2026</p>
-    </div>
-</div>
-</footer>
 
 <script>
-function trocar(img){
-    document.getElementById("imgPrincipal").src = img.src;
+
+
+/* =========================
+   GALERIA
+========================= */
+
+let atual = 0;
+
+const slides =
+    document.querySelectorAll(".slide");
+
+const miniaturas =
+    document.querySelectorAll(".miniatura");
+
+const total =
+    slides.length;
+
+
+function mostrar(numero) {
+
+    if(numero < 0) {
+
+        numero = total - 1;
+
+    }
+
+
+    if(numero >= total) {
+
+        numero = 0;
+
+    }
+
+
+    atual = numero;
+
+
+    slides.forEach(function(slide) {
+
+        slide.classList.remove("ativo");
+
+    });
+
+
+    miniaturas.forEach(function(mini) {
+
+        mini.classList.remove("selecionada");
+
+    });
+
+
+    slides[atual].classList.add("ativo");
+
+
+    if(miniaturas[atual]) {
+
+        miniaturas[atual]
+            .classList
+            .add("selecionada");
+
+    }
+
+
+    document
+        .getElementById("contador")
+        .innerText =
+        (atual + 1) + " / " + total;
+
 }
 
-function add(){
-    let t = document.getElementById("txt").value.trim();
-    if(t == "") return;
 
-    let d = document.createElement("div");
-    d.className = "card";
-    d.innerHTML = `<div class="nome">Usuário</div><div>${t}</div><div class="tempo">agora</div>`;
+function proximo() {
 
-    document.getElementById("lista").prepend(d);
-    document.getElementById("txt").value = "";
+    mostrar(atual + 1);
+
 }
+
+
+function anterior() {
+
+    mostrar(atual - 1);
+
+}
+
+
+function irPara(numero) {
+
+    mostrar(numero);
+
+}
+
+
+/* =========================
+   TECLADO
+========================= */
+
+document.addEventListener(
+    "keydown",
+    function(e) {
+
+        if(e.key === "ArrowRight") {
+
+            proximo();
+
+        }
+
+
+        if(e.key === "ArrowLeft") {
+
+            anterior();
+
+        }
+
+    }
+);
+
+
+/* =========================
+   COMENTÁRIOS
+========================= */
+
+function comentar() {
+
+    let texto =
+        document
+        .getElementById("texto")
+        .value
+        .trim();
+
+
+    if(!texto) {
+
+        return;
+
+    }
+
+
+    let div =
+        document.createElement("div");
+
+
+    div.className =
+        "comentario";
+
+
+    div.innerHTML =
+        "<b>Usuário</b><br>" +
+        texto;
+
+
+    document
+        .getElementById("lista")
+        .prepend(div);
+
+
+    document
+        .getElementById("texto")
+        .value = "";
+
+}
+
 </script>
 
+
 </body>
+
 </html>

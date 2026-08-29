@@ -1,242 +1,106 @@
 <?php
 session_start();
 
-if (!isset($_SESSION["ID_Usuario"])) {
+// Puxa a conexão centralizada usando MySQLi
+require_once 'conexao.php';
+
+// Verifica se o usuário está logado
+if (!isset($_SESSION['ID_Usuario'])) {
     header("Location: login.php");
     exit;
 }
 
-$id_usuario = $_SESSION["ID_Usuario"];
+$id_usuario = (int)$_SESSION['ID_Usuario'];
 
-$usuario_foto = "https://cdn-icons-png.flaticon.com/512/149/149071.png";
+// Busca os jogos que o usuário comprou
+$sql = "SELECT b.Data_Aquisicao, b.Horas_Jogadas, j.ID_jogo, j.Nome, j.Capa 
+        FROM biblioteca b
+        INNER JOIN jogo j ON b.ID_jogo = j.ID_jogo
+        WHERE b.ID_usuario = ?
+        ORDER BY b.ID_Biblioteca DESC";
 
-$host = "localhost";
-$db   = "legends_games_1";
-$user = "root";
-$pass = "";
-$charset = "utf8mb4";
+$stmt = $conexao->prepare($sql);
 
-$dsn = "mysql:host=$host;dbname=$db;charset=$charset";
-
-$options = [
-    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
-];
-
-try {
-    $pdo = new PDO($dsn, $user, $pass, $options);
-} catch (PDOException $e) {
-    die("Erro: " . $e->getMessage());
+if (!$stmt) {
+    die("Erro na consulta: " . $conexao->error);
 }
 
-$sql = "
-SELECT
-    b.ID_Biblioteca,
-    j.ID_jogo,
-    j.Nome,
-    j.Capa
-FROM biblioteca b
-INNER JOIN jogo j
-    ON b.ID_jogo = j.ID_jogo
-WHERE b.ID_usuario = :usuario
-ORDER BY j.Nome
-";
+$stmt->bind_param("i", $id_usuario);
+$stmt->execute();
+$resultado = $stmt->get_result();
 
-$stmt = $pdo->prepare($sql);
-$stmt->execute([
-    'usuario' => $id_usuario
-]);
-
-$biblioteca = $stmt->fetchAll();
-
-$busca = $_GET['busca'] ?? '';
-
-if ($busca != '') {
-    $biblioteca = array_filter($biblioteca, function ($jogo) use ($busca) {
-        return stripos($jogo['Nome'], $busca) !== false;
-    });
+$meus_jogos = [];
+if ($resultado->num_rows > 0) {
+    while ($row = $resultado->fetch_assoc()) {
+        $meus_jogos[] = $row;
+    }
 }
+$stmt->close();
 ?>
 
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
 <meta charset="UTF-8">
-<title>Minha Biblioteca</title>
-
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Minha Biblioteca - Legends Games</title>
 <style>
-
-body{
-    background: linear-gradient(135deg,#000000 0%,#111111 40%,#ffd700 80%);
-    color:#ffd700;
-    font-family:Segoe UI;
-    margin:0;
-    min-height:100vh;
-}
-
-header{
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    background:rgba(0,0,0,0.85);
-    padding:15px;
-    border-bottom:2px solid #ffd700;
-    position:relative;
-}
-
-header h1{
-    position:absolute;
-    left:50%;
-    transform:translateX(-50%);
-    margin:0;
-    font-size:32px;
-}
-
-.voltar{
-    color:#ffd700;
-    text-decoration:none;
-    font-size:30px;
-    font-weight:bold;
-}
-
-.voltar:hover{
-    color:white;
-}
-
-.foto{
-    width:45px;
-    height:45px;
-    border-radius:50%;
-    border:2px solid #ffd700;
-}
-
-main{
-    padding:20px;
-}
-
-.busca{
-    width:300px;
-    padding:12px;
-    border:none;
-    border-radius:20px;
-    background:#111;
-    color:#ffd700;
-}
-
-.grid{
-    margin-top:25px;
-    display:grid;
-    grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
-    gap:20px;
-}
-
-.card{
-    background:rgba(0,0,0,0.85);
-    border:2px solid #ffd700;
-    border-radius:10px;
-    overflow:hidden;
-    transition:0.3s;
-}
-
-.card:hover{
-    transform:scale(1.04);
-    box-shadow:0 0 15px #ffd700;
-}
-
-.card img{
-    width:100%;
-    height:130px;
-    object-fit:cover;
-}
-
-.title{
-    padding:10px;
-    text-align:center;
-    font-weight:bold;
-}
-
-.empty{
-    text-align:center;
-    margin-top:50px;
-    font-size:22px;
-}
-
-.usuario-info{
-    text-align:center;
-    margin-bottom:20px;
-}
-
-.usuario-info h2{
-    margin:0;
-}
-
+* { box-sizing: border-box; }
+body { margin: 0; font-family: Arial, sans-serif; background: radial-gradient(circle at top, #1b2838, #05070a); color: white; min-height: 100vh; }
+header { padding: 20px; background: #0d0f13; border-bottom: 2px solid gold; display: flex; justify-content: space-between; align-items: center; }
+.logo { color: gold; font-size: 28px; font-weight: bold; }
+.voltar { color: gold; text-decoration: none; background: #222; padding: 10px 15px; border-radius: 8px; font-weight: bold; }
+.voltar:hover { background: gold; color: black; }
+.container { width: 90%; max-width: 1200px; margin: 40px auto; }
+h1 { color: gold; text-align: center; margin-bottom: 40px; font-size: 36px; }
+.grid-biblioteca { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 30px; }
+.card-jogo { background: #14181f; border-radius: 15px; overflow: hidden; border: 1px solid #333; transition: 0.3s; }
+.card-jogo:hover { transform: translateY(-5px); border-color: gold; box-shadow: 0 5px 15px rgba(255, 215, 0, 0.2); }
+.card-jogo img { width: 100%; height: 150px; object-fit: cover; }
+.info-jogo { padding: 20px; }
+.info-jogo h3 { margin: 0 0 10px 0; color: white; font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.estatisticas { font-size: 13px; color: #aaa; margin-bottom: 15px; line-height: 1.6; }
+.estatisticas span { color: gold; font-weight: bold; }
+.btn-jogar { display: block; width: 100%; padding: 12px; background: gold; color: black; text-align: center; text-decoration: none; border-radius: 8px; font-weight: bold; transition: 0.3s; }
+.btn-jogar:hover { background: white; }
+.vazio { text-align: center; padding: 50px; background: #14181f; border-radius: 15px; border: 1px dashed #333; grid-column: 1 / -1; }
+.vazio a { display: inline-block; margin-top: 20px; padding: 12px 25px; background: gold; color: black; text-decoration: none; border-radius: 8px; font-weight: bold; }
 </style>
-
 </head>
-
 <body>
 
 <header>
-
-    <a href="tela_inicial.php" class="voltar">
-        &#8592;
-    </a>
-
-    <h1>Legends Games</h1>
-
-    <a href="configuração.php">
-        <img src="<?= $usuario_foto ?>" class="foto">
-    </a>
-
+    <div class="logo">Legends_Games</div>
+    <a href="tela_inicial.php" class="voltar">⬅ Voltar à Loja</a>
 </header>
 
-<main>
+<div class="container">
+    <h1>📚 Minha Biblioteca</h1>
 
-<div class="usuario-info">
-</div>
-
-<form method="GET">
-    <input
-        type="search"
-        name="busca"
-        class="busca"
-        placeholder="Buscar jogo..."
-        value="<?= htmlspecialchars($busca) ?>"
-    >
-</form>
-
-<?php if(count($biblioteca) == 0): ?>
-
-    <p class="empty">
-        Você ainda não possui jogos na biblioteca.
-    </p>
-
-<?php else: ?>
-
-<div class="grid">
-
-<?php foreach($biblioteca as $jogo): ?>
-
-<div class="card">
-
-    <img
-        src="<?= htmlspecialchars($jogo['Capa']) ?>"
-        onerror="this.parentElement.style.display='none'"
-    >
-
-    <div class="title">
-        <?= htmlspecialchars($jogo['Nome']) ?>
+    <div class="grid-biblioteca">
+        <?php if (count($meus_jogos) > 0): ?>
+            <?php foreach ($meus_jogos as $jogo): ?>
+                <div class="card-jogo">
+                    <img src="<?= htmlspecialchars($jogo['Capa']) ?>" onerror="this.src='https://via.placeholder.com/250x150/111111/FFD700?text=Capa'">
+                    <div class="info-jogo">
+                        <h3><?= htmlspecialchars($jogo['Nome']) ?></h3>
+                        <div class="estatisticas">
+                            Adquirido em: <span><?= date('d/m/Y', strtotime($jogo['Data_Aquisicao'])) ?></span><br>
+                            Tempo de jogo: <span><?= (int)$jogo['Horas_Jogadas'] ?>h</span>
+                        </div>
+                        <a href="tela_de_jogo.php?nome=<?= urlencode($jogo['Nome']) ?>" class="btn-jogar">🎮 Instalar / Jogar</a>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        <?php else: ?>
+            <div class="vazio">
+                <h2 style="color: white; margin-top: 0;">Sua biblioteca está vazia!</h2>
+                <p style="color: #aaa;">Você ainda não comprou nenhum jogo.</p>
+                <a href="tela_inicial.php">Explorar a Loja</a>
+            </div>
+        <?php endif; ?>
     </div>
-
 </div>
-
-<?php endforeach; ?>
-
-</div>
-
-<?php endif; ?>
-
-</main>
 
 </body>
 </html>

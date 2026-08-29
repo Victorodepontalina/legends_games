@@ -1,15 +1,16 @@
 <?php
-
 $host = "localhost";
-$usuario = "root";
-$senha = "";
-$banco = "legends_games_1";
+$user = "root";
+$pass = "";
+$db   = "legends_games_1";
 
-$conexao = mysqli_connect($host, $usuario, $senha, $banco);
+$conn = new mysqli($host, $user, $pass, $db);
+$conn->set_charset("utf8mb4");
 
-if (!$conexao) {
-    die("Erro na conexão com o banco de dados: " . mysqli_connect_error());
+if ($conn->connect_error) {
+    die("Erro de conexão com o banco de dados: " . $conn->connect_error);
 }
 
-mysqli_set_charset($conexao, "utf8");
+// Criamos um alias (apelido) para não quebrar arquivos que usavam a variável $conexao em vez de $conn
+$conexao = $conn;
 ?>

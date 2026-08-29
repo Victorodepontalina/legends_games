@@ -1,22 +1,7 @@
 <?php
 session_start();
 
-// Ativa a exibição de erros (Evita a tela branca)
-ini_set('display_errors', 1);
-error_reporting(E_ALL);
-
-$host = "localhost";
-$user = "root";
-$pass = "";
-$db   = "legends_games_1";
-
-$conn = new mysqli($host, $user, $pass, $db);
-$conn->set_charset("utf8mb4");
-
-if ($conn->connect_error) {
-    die("<h2 style='color:white;'>Erro de conexão: " . $conn->connect_error . "</h2>");
-}
-
+require_once 'conexao.php';
 // Criar tabela de comentários se não existir
 $sqlCriarComentarios = "CREATE TABLE IF NOT EXISTS comentarios (
     ID_Comentario INT(11) NOT NULL AUTO_INCREMENT,

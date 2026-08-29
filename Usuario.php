@@ -1,18 +1,7 @@
 <?php
 session_start();
 
-$host = "localhost";
-$user = "root";
-$pass = "";
-$db = "legends_games_1";
-
-$conn = new mysqli($host, $user, $pass, $db);
-$conn->set_charset("utf8mb4");
-
-if ($conn->connect_error) {
-    die("Erro de conexão: " . $conn->connect_error);
-}
-
+require_once 'conexao.php';
 if (!isset($_SESSION['logado']) || $_SESSION['logado'] !== true) {
     header("Location: login.php");
     exit();

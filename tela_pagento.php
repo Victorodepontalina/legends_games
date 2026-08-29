@@ -2,28 +2,7 @@
 
 session_start();
 
-/* =========================================================
-   CONEXÃO COM O BANCO
-========================================================= */
-
-$host = "localhost";
-$user = "root";
-$pass = "";
-$db   = "legends_games_1";
-
-$conn = new mysqli(
-    $host,
-    $user,
-    $pass,
-    $db
-);
-
-if ($conn->connect_error) {
-    die(
-        "Erro de conexão com o banco: " .
-        $conn->connect_error
-    );
-}
+require_once 'conexao.php';
 
 $conn->set_charset("utf8mb4");
 

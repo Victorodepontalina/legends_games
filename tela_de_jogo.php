@@ -1,6 +1,10 @@
 <?php
 session_start();
 
+// Ativa a exibição de erros (Evita a tela branca)
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
+
 $host = "localhost";
 $user = "root";
 $pass = "";
@@ -10,7 +14,7 @@ $conn = new mysqli($host, $user, $pass, $db);
 $conn->set_charset("utf8mb4");
 
 if ($conn->connect_error) {
-    die("Erro de conexão: " . $conn->connect_error);
+    die("<h2 style='color:white;'>Erro de conexão: " . $conn->connect_error . "</h2>");
 }
 
 // Criar tabela de comentários se não existir
@@ -39,23 +43,28 @@ $sqlJogo = "SELECT j.*, c.Nome_Categoria FROM jogo j
             WHERE j.Nome = ? LIMIT 1";
 
 $stmt = $conn->prepare($sqlJogo);
+if (!$stmt) {
+    die("<h2 style='color:white; text-align:center;'>Erro ao consultar o jogo: " . $conn->error . "</h2>");
+}
+
 $stmt->bind_param("s", $nome);
 $stmt->execute();
 $resultado = $stmt->get_result();
 
 if ($resultado->num_rows === 0) {
-    die("<h2 style='color:white; text-align:center; margin-top:50px;'>Jogo não encontrado no banco de dados!</h2>");
+    die("<h2 style='color:white; text-align:center; margin-top:50px;'>Jogo não encontrado no banco de dados!<br>Você procurou por: " . htmlspecialchars($nome) . "</h2>");
 }
 
 $jogo = $resultado->fetch_assoc();
 $stmt->close();
 
+// Travas de segurança (?? '') para evitar Tela Branca caso o banco retorne vazio
 $idJogo = $jogo['ID_jogo'];
-$preco = $jogo['Preco_Unitario'];
-$capa = $jogo['Capa'];
+$preco = $jogo['Preco_Unitario'] ?? 0;
+$capa = $jogo['Capa'] ?? '';
 $descricao = !empty($jogo['Descricao']) ? $jogo['Descricao'] : "Explore o mundo de " . htmlspecialchars($nome) . ", enfrente desafios e aproveite uma experiência incrível.";
 $categoria = !empty($jogo['Nome_Categoria']) ? $jogo['Nome_Categoria'] : "Geral";
-$video = $jogo['Video_Demonstrativo'];
+$video = $jogo['Video_Demonstrativo'] ?? '';
 
 // Valida se o link do vídeo é real
 $temVideo = (!empty($video) && $video !== '0' && $video !== 'link_video');
@@ -71,11 +80,13 @@ $idUsuario = isset($_SESSION['ID_Usuario']) ? (int)$_SESSION['ID_Usuario'] : nul
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['enviar_comentario'])) {
     $comentario = trim($_POST['comentario'] ?? '');
     if ($comentario !== '') {
-        $comentario = mb_substr($comentario, 0, 1000);
+        $comentario = substr($comentario, 0, 1000);
         $stmtComentario = $conn->prepare("INSERT INTO comentarios (ID_usuario, ID_jogo, Comentario, Data_Comentario) VALUES (?, ?, ?, NOW())");
-        $stmtComentario->bind_param("iis", $idUsuario, $idJogo, $comentario);
-        $stmtComentario->execute();
-        $stmtComentario->close();
+        if ($stmtComentario) {
+            $stmtComentario->bind_param("iis", $idUsuario, $idJogo, $comentario);
+            $stmtComentario->execute();
+            $stmtComentario->close();
+        }
         header("Location: tela_de_jogo.php?nome=" . urlencode($nome));
         exit;
     }
@@ -85,14 +96,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['enviar_comentario']))
    BUSCAR TODOS OS COMENTÁRIOS DO JOGO
 ========================================================= */
 $comentarios = [];
-$stmtComentarios = $conn->prepare("SELECT c.Comentario, c.Data_Comentario, COALESCE(u.Nome_Exibicao, u.Nome, 'Usuário Desconhecido') AS NomeUsuario FROM comentarios c LEFT JOIN usuario u ON u.ID_usuario = c.ID_usuario WHERE c.ID_jogo = ? ORDER BY c.ID_Comentario DESC");
-$stmtComentarios->bind_param("i", $idJogo);
-$stmtComentarios->execute();
-$resComentarios = $stmtComentarios->get_result();
-while ($linha = $resComentarios->fetch_assoc()) {
-    $comentarios[] = $linha;
+$sqlComentarios = "SELECT c.Comentario, c.Data_Comentario, COALESCE(u.Nome_Exibicao, u.Nome, 'Usuário Desconhecido') AS NomeUsuario FROM comentarios c LEFT JOIN usuario u ON u.ID_usuario = c.ID_usuario WHERE c.ID_jogo = ? ORDER BY c.ID_Comentario DESC";
+$stmtComentarios = $conn->prepare($sqlComentarios);
+
+if ($stmtComentarios) {
+    $stmtComentarios->bind_param("i", $idJogo);
+    $stmtComentarios->execute();
+    $resComentarios = $stmtComentarios->get_result();
+    while ($linha = $resComentarios->fetch_assoc()) {
+        $comentarios[] = $linha;
+    }
+    $stmtComentarios->close();
 }
-$stmtComentarios->close();
 ?>
 
 <!DOCTYPE html>
@@ -152,12 +167,10 @@ textarea:focus { outline: none; border-color: gold; }
 <div class="container">
     <div>
         <div class="galeria">
-            <!-- Capa do Jogo -->
             <div class="slide ativo">
                 <img src="<?= htmlspecialchars($capa) ?>" onerror="this.src='https://via.placeholder.com/800x500/111111/FFD700?text=Capa'">
             </div>
             
-            <!-- Vídeo (se existir no banco) -->
             <?php if ($temVideo) { ?>
             <div class="slide">
                 <iframe src="<?= htmlspecialchars($video) ?>" allowfullscreen></iframe>
@@ -214,8 +227,8 @@ textarea:focus { outline: none; border-color: gold; }
         <?php if (count($comentarios) > 0): ?>
             <?php foreach ($comentarios as $c): ?>
                 <div class="comentario">
-                    <span class="usuario-comentario">👤 <?= htmlspecialchars($c['NomeUsuario']) ?> <small style="color:#888; font-weight:normal; font-size:12px;">- <?= date('d/m/Y H:i', strtotime($c['Data_Comentario'])) ?></small></span>
-                    <div class="texto-comentario"><?= htmlspecialchars($c['Comentario']) ?></div>
+                    <span class="usuario-comentario">👤 <?= htmlspecialchars($c['NomeUsuario'] ?? 'Visitante') ?> <small style="color:#888; font-weight:normal; font-size:12px;">- <?= date('d/m/Y H:i', strtotime($c['Data_Comentario'])) ?></small></span>
+                    <div class="texto-comentario"><?= htmlspecialchars($c['Comentario'] ?? '') ?></div>
                 </div>
             <?php endforeach; ?>
         <?php else: ?>

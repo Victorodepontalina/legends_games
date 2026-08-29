@@ -1,20 +1,7 @@
 <?php
 session_start();
 
-// =======================
-// CONEXÃO DIRETA
-// =======================
-$servidor = "localhost";
-$usuario = "root";
-$senhaBanco = "";
-$banco = "legends_games_1";
-
-$conexao = new mysqli($servidor, $usuario, $senhaBanco, $banco);
-$conexao->set_charset("utf8");
-
-if ($conexao->connect_error) {
-    die("Erro na conexão: " . $conexao->connect_error);
-}
+require_once 'conexao.php';
 
 $erro = "";
 

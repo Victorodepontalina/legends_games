@@ -27,18 +27,18 @@ if ($conn->connect_error) {
 
 $conn->set_charset("utf8mb4");
 
-
 /* =========================================================
    USUÁRIO
 ========================================================= */
 
-/*
-   Enquanto o sistema de login não estiver ligado,
-   estamos usando o usuário 29.
-*/
+// Verifica se a pessoa está logada antes de deixar pagar
+if (!isset($_SESSION["ID_Usuario"])) {
+    header("Location: login.php");
+    exit;
+}
 
-$id_usuario = 29;
-
+// Pega o ID do usuário real que fez o login
+$id_usuario = (int)$_SESSION["ID_Usuario"];
 
 /* =========================================================
    GARANTIR QUE O CARRINHO EXISTE

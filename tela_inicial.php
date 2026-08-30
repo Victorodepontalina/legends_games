@@ -13,6 +13,7 @@ $conexao->query("CREATE TABLE IF NOT EXISTS favoritos (
 
 $conexao->query("ALTER TABLE jogo ADD COLUMN IF NOT EXISTS Badge VARCHAR(50) DEFAULT ''");
 
+// ADICIONAR AO CARRINHO
 if (isset($_POST['adicionar'])) {
     $nome = $_POST['nome'];
     $preco = (float)$_POST['preco'];
@@ -27,6 +28,7 @@ if (isset($_POST['adicionar'])) {
     exit;
 }
 
+// ADICIONAR / REMOVER FAVORITO
 if (isset($_POST['favoritar'])) {
     if (!isset($_SESSION['ID_Usuario'])) { header("Location: login.php"); exit; }
     $id_jogo_fav = (int)$_POST['id_jogo'];
@@ -70,10 +72,11 @@ $categorias = [];
 $resCat = $conexao->query("SELECT * FROM categoria ORDER BY Nome_Categoria ASC");
 if ($resCat) while ($row = $resCat->fetch_assoc()) $categorias[] = $row;
 
+// CAPTURAR FILTROS E ORDENAÇÃO DA URL
 $busca = $_GET['busca'] ?? '';
 $filtro_categoria = $_GET['categoria'] ?? '';
+$ordem = $_GET['ordem'] ?? '';
 
-// Agora a query puxa a coluna Badge oficial
 $sqlJogos = "SELECT ID_jogo, Nome, Preco_Unitario, Capa, Badge FROM jogo WHERE 1=1";
 $params = [];
 $tipos = "";
@@ -88,7 +91,19 @@ if ($filtro_categoria !== '') {
     $params[] = $filtro_categoria;
     $tipos .= "i";
 }
-$sqlJogos .= " ORDER BY ID_jogo DESC";
+
+// APLICAR ORDENAÇÃO DINÂMICA
+if ($ordem === 'menor_preco') {
+    $sqlJogos .= " ORDER BY Preco_Unitario ASC";
+} elseif ($ordem === 'maior_preco') {
+    $sqlJogos .= " ORDER BY Preco_Unitario DESC";
+} elseif ($ordem === 'az') {
+    $sqlJogos .= " ORDER BY Nome ASC";
+} elseif ($ordem === 'za') {
+    $sqlJogos .= " ORDER BY Nome DESC";
+} else {
+    $sqlJogos .= " ORDER BY ID_jogo DESC"; // Mais recentes por padrão
+}
 
 $stmt = $conexao->prepare($sqlJogos);
 if (!empty($params)) $stmt->bind_param($tipos, ...$params);
@@ -147,16 +162,17 @@ body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,
 .add:hover { background: white; }
 .btn-fav { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.6); border: none; font-size: 24px; cursor: pointer; border-radius: 50%; width: 40px; height: 40px; display: flex; justify-content: center; align-items: center; transition: 0.2s; z-index: 20;}
 .btn-fav:hover { background: rgba(0,0,0,0.9); transform: scale(1.1); }
-
 .badge-faixa { position: absolute; top: 15px; left: -35px; background: #ff4d4d; color: white; padding: 5px 40px; font-size: 12px; font-weight: bold; text-transform: uppercase; transform: rotate(-45deg); box-shadow: 0 2px 4px rgba(0,0,0,0.5); z-index: 10; letter-spacing: 1px; pointer-events: none;}
 .badge-novo { background: #00ff88; color: black; }
 .badge-hot { background: #ff9900; color: black; }
-
 .carrinho { color: gold; text-decoration: none; font-weight: bold; margin-right: 15px; }
-.barra-busca { display: flex; justify-content: center; gap: 10px; margin-bottom: 30px; background: #111; padding: 15px; border-radius: 10px; }
-.barra-busca input, .barra-busca select { padding: 12px; border-radius: 8px; border: 1px solid #444; background: #222; color: white; font-size: 16px; }
-.barra-busca input { flex: 1; max-width: 400px; }
-.barra-busca button { padding: 12px 25px; background: gold; color: black; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 16px; }
+
+/* BARRA DE BUSCA E FILTROS */
+.barra-busca { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin-bottom: 30px; background: #111; padding: 15px; border-radius: 10px; }
+.barra-busca input, .barra-busca select { padding: 12px; border-radius: 8px; border: 1px solid #444; background: #222; color: white; font-size: 15px; }
+.barra-busca input { flex: 2; min-width: 200px; max-width: 400px; }
+.barra-busca select { flex: 1; min-width: 150px; }
+.barra-busca button { padding: 12px 25px; background: gold; color: black; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 15px; }
 .barra-busca button:hover { background: white; }
 .limpar-busca { color: #aaa; text-decoration: none; display: flex; align-items: center; padding: 0 10px; }
 .limpar-busca:hover { color: gold; }
@@ -221,6 +237,7 @@ body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,
 
     <form class="barra-busca" method="GET" action="tela_inicial.php">
         <input type="text" name="busca" placeholder="Buscar jogo..." value="<?= htmlspecialchars($busca) ?>">
+        
         <select name="categoria">
             <option value="">Todas as Categorias</option>
             <?php foreach ($categorias as $cat): ?>
@@ -229,13 +246,22 @@ body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,
                 </option>
             <?php endforeach; ?>
         </select>
+        
+        <select name="ordem" onchange="this.form.submit()">
+            <option value="" <?= $ordem === '' ? 'selected' : '' ?>>Mais Recentes</option>
+            <option value="menor_preco" <?= $ordem === 'menor_preco' ? 'selected' : '' ?>>Menor Preço</option>
+            <option value="maior_preco" <?= $ordem === 'maior_preco' ? 'selected' : '' ?>>Maior Preço</option>
+            <option value="az" <?= $ordem === 'az' ? 'selected' : '' ?>>Ordem Alfabética (A-Z)</option>
+            <option value="za" <?= $ordem === 'za' ? 'selected' : '' ?>>Ordem Alfabética (Z-A)</option>
+        </select>
+
         <button type="submit">🔍 Buscar</button>
-        <?php if ($busca !== '' || $filtro_categoria !== ''): ?>
+        <?php if ($busca !== '' || $filtro_categoria !== '' || $ordem !== ''): ?>
             <a href="tela_inicial.php" class="limpar-busca">✖ Limpar</a>
         <?php endif; ?>
     </form>
 
-    <?php if (($busca === '' && $filtro_categoria === '') && count($jogos_destaque) > 0): ?>
+    <?php if (($busca === '' && $filtro_categoria === '' && $ordem === '') && count($jogos_destaque) > 0): ?>
     <div class="hero-banner">
         <?php foreach($jogos_destaque as $i => $jd): ?>
             <div class="hero-slide <?= $i === 0 ? 'ativo' : '' ?>">
@@ -251,8 +277,8 @@ body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,
         <?php endforeach; ?>
         <?php if(count($jogos_destaque) > 1): ?>
         <div class="hero-nav">
-            <button class="hero-seta" onclick="mudarSlide(-1)">❮</button>
-            <button class="hero-seta" onclick="mudarSlide(1)">❯</button>
+            <button type="button" class="hero-seta" onclick="mudarSlide(-1)">❮</button>
+            <button type="button" class="hero-seta" onclick="mudarSlide(1)">❯</button>
         </div>
         <?php endif; ?>
     </div>
@@ -264,8 +290,6 @@ body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,
         <?php if (count($jogos_banco) > 0) {
             foreach ($jogos_banco as $g) { 
                 $eh_favorito = in_array($g['ID_jogo'], $meus_favoritos);
-                
-                // LÓGICA DO BANCO DE DADOS
                 $emblema = "";
                 if (!empty($g['Badge'])) {
                     if ($g['Badge'] === 'oferta') $emblema = '<div class="badge-faixa">💥 Oferta</div>';
@@ -275,14 +299,12 @@ body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,
             ?>
             <div class="card">
                 <?= $emblema ?>
-
                 <form method="POST" style="margin:0;">
                     <input type="hidden" name="id_jogo" value="<?= $g['ID_jogo'] ?>">
                     <button type="submit" name="favoritar" class="btn-fav" title="Favoritos">
                         <?= $eh_favorito ? '❤️' : '🤍' ?>
                     </button>
                 </form>
-
                 <img src="<?= htmlspecialchars($g['Capa']) ?>" onerror="this.src='https://via.placeholder.com/300x150'">
                 <div class="card-content">
                     <h3><?= htmlspecialchars($g['Nome']) ?></h3>
@@ -296,7 +318,7 @@ body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,
                     </form>
                 </div>
             </div>
-        <?php } } else { echo "<p style='color: white; text-align: center; width: 100%;'>Nenhum jogo encontrado.</p>"; } ?>
+        <?php } } else { echo "<p style='color: white; text-align: center; width: 100%;'>Nenhum jogo encontrado para esta busca.</p>"; } ?>
     </div>
 </main>
 </div>

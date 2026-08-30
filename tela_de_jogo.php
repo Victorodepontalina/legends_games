@@ -8,7 +8,6 @@ error_reporting(E_ALL);
 // Atualiza a tabela de comentários para aceitar Notas
 $conexao->query("ALTER TABLE comentarios ADD COLUMN IF NOT EXISTS Nota INT DEFAULT 5");
 
-// Criar tabela de comentários se não existir
 $sqlCriarComentarios = "CREATE TABLE IF NOT EXISTS comentarios (
     ID_Comentario INT(11) NOT NULL AUTO_INCREMENT,
     ID_usuario INT(11) DEFAULT NULL,
@@ -41,7 +40,7 @@ $stmt->execute();
 $resultado = $stmt->get_result();
 
 if ($resultado->num_rows === 0) {
-    die("<h2 style='color:white; text-align:center; margin-top:50px;'>Jogo não encontrado no banco de dados!<br>Você procurou por: " . htmlspecialchars($nome) . "</h2>");
+    die("<h2 style='color:white; text-align:center; margin-top:50px;'>Jogo não encontrado no banco de dados!</h2>");
 }
 
 $jogo = $resultado->fetch_assoc();
@@ -106,7 +105,6 @@ if ($stmtComentarios) {
 
 $media = $totalAvaliacoes > 0 ? round($somaNotas / $totalAvaliacoes, 1) : 0;
 
-// Função simples para desenhar as estrelas
 function desenharEstrelas($nota) {
     $nota = round($nota);
     return str_repeat('★', $nota) . str_repeat('☆', 5 - $nota);
@@ -150,9 +148,8 @@ h1 { width: 90%; margin: 35px auto; color: gold; font-size: 40px; display: flex;
 .ver-carrinho:hover { background: gold; color: black; }
 .comentarios { width: 90%; margin: 30px auto 50px; background: #14181f; padding: 25px; border-radius: 15px; border: 1px solid #333;}
 .comentarios h2 { color: gold; margin-top: 0; border-bottom: 1px solid #333; padding-bottom:10px;}
-textarea, select { width: 100%; background: #222; color: white; border: 1px solid #555; padding: 12px; border-radius: 8px; font-family: Arial; margin-bottom: 10px;}
-textarea { height: 80px; resize: none; }
-textarea:focus, select:focus { outline: none; border-color: gold; }
+textarea { width: 100%; background: #222; color: white; border: 1px solid #555; padding: 12px; border-radius: 8px; font-family: Arial; margin-bottom: 10px; height: 80px; resize: none; }
+textarea:focus { outline: none; border-color: gold; }
 .enviar { padding: 12px 25px; background: gold; color: black; border: 0; border-radius: 8px; font-weight: bold; cursor: pointer; }
 .enviar:hover { background: white; }
 .comentario { background: #222; padding: 18px; margin-top: 15px; border-radius: 10px; border-left: 4px solid gold; display: flex; gap: 15px;}
@@ -160,6 +157,15 @@ textarea:focus, select:focus { outline: none; border-color: gold; }
 .conteudo-comentario { flex: 1; }
 .usuario-comentario { color: gold; font-weight: bold; margin-bottom: 5px; display: block;}
 .nota-comentario { color: gold; font-size: 14px; margin-bottom: 8px; }
+
+/* NOVO SISTEMA DE ESTRELAS CLICÁVEIS */
+.avaliacao-estrelas { display: flex; flex-direction: row-reverse; justify-content: flex-end; gap: 5px; margin-bottom: 15px; }
+.avaliacao-estrelas input { display: none; }
+.avaliacao-estrelas label { font-size: 35px; color: #444; cursor: pointer; transition: color 0.2s; }
+.avaliacao-estrelas input:checked ~ label, 
+.avaliacao-estrelas label:hover, 
+.avaliacao-estrelas label:hover ~ label { color: gold; }
+
 @media(max-width: 800px) { .container { grid-template-columns: 1fr; } .galeria { height: 350px; } }
 </style>
 </head>
@@ -239,13 +245,21 @@ textarea:focus, select:focus { outline: none; border-color: gold; }
     <?php if($idUsuario): ?>
     <form method="POST" style="margin-bottom: 30px; background: #1a1e24; padding: 20px; border-radius: 10px;">
         <label style="color: gold; font-weight: bold; display:block; margin-bottom: 5px;">Que nota você dá para este jogo?</label>
-        <select name="nota" required>
-            <option value="5">★★★★★ (5/5) - Excelente</option>
-            <option value="4">★★★★☆ (4/5) - Muito Bom</option>
-            <option value="3">★★★☆☆ (3/5) - Bom</option>
-            <option value="2">★★☆☆☆ (2/5) - Regular</option>
-            <option value="1">★☆☆☆☆ (1/5) - Ruim</option>
-        </select>
+        
+        <!-- ESTRELAS INTERATIVAS -->
+        <div class="avaliacao-estrelas">
+            <input type="radio" id="star5" name="nota" value="5" required>
+            <label for="star5" title="5 estrelas">★</label>
+            <input type="radio" id="star4" name="nota" value="4">
+            <label for="star4" title="4 estrelas">★</label>
+            <input type="radio" id="star3" name="nota" value="3">
+            <label for="star3" title="3 estrelas">★</label>
+            <input type="radio" id="star2" name="nota" value="2">
+            <label for="star2" title="2 estrelas">★</label>
+            <input type="radio" id="star1" name="nota" value="1">
+            <label for="star1" title="1 estrela">★</label>
+        </div>
+
         <textarea name="comentario" placeholder="Escreva o que você achou do jogo..." required></textarea>
         <button type="submit" name="enviar_comentario" class="enviar">💬 Enviar Avaliação</button>
     </form>

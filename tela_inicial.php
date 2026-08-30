@@ -15,19 +15,12 @@ if (isset($_POST['adicionar'])) {
     $nome = $_POST['nome'];
     $preco = (float)$_POST['preco'];
     $img = $_POST['img'];
-
     if (!isset($_SESSION['carrinho'])) $_SESSION['carrinho'] = [];
-
     $existe = false;
     foreach ($_SESSION['carrinho'] as &$item) {
-        if ($item['nome'] == $nome) {
-            $item['quantidade']++;
-            $existe = true;
-            break;
-        }
+        if ($item['nome'] == $nome) { $item['quantidade']++; $existe = true; break; }
     }
     if (!$existe) $_SESSION['carrinho'][] = ["nome" => $nome, "preco" => $preco, "img" => $img, "quantidade" => 1];
-    
     header("Location: tela_inicial.php");
     exit;
 }
@@ -36,7 +29,6 @@ if (isset($_POST['favoritar'])) {
     if (!isset($_SESSION['ID_Usuario'])) { header("Location: login.php"); exit; }
     $id_jogo_fav = (int)$_POST['id_jogo'];
     $id_user = (int)$_SESSION['ID_Usuario'];
-    
     $check = $conexao->prepare("SELECT ID_Favorito FROM favoritos WHERE ID_usuario = ? AND ID_jogo = ?");
     $check->bind_param("ii", $id_user, $id_jogo_fav);
     $check->execute();
@@ -68,7 +60,6 @@ if (isset($_SESSION['ID_Usuario'])) {
         if (!empty($resUser['Foto_Perfil'])) $foto_perfil = $resUser['Foto_Perfil'];
     }
     $stmtUser->close();
-    
     $resFav = $conexao->query("SELECT ID_jogo FROM favoritos WHERE ID_usuario = $id_u");
     while ($f = $resFav->fetch_assoc()) $meus_favoritos[] = $f['ID_jogo'];
 }
@@ -80,7 +71,8 @@ if ($resCat) while ($row = $resCat->fetch_assoc()) $categorias[] = $row;
 $busca = $_GET['busca'] ?? '';
 $filtro_categoria = $_GET['categoria'] ?? '';
 
-$sqlJogos = "SELECT ID_jogo, Nome, Preco_Unitario, Capa FROM jogo WHERE 1=1";
+// Agora a query puxa a coluna Badge oficial
+$sqlJogos = "SELECT ID_jogo, Nome, Preco_Unitario, Capa, Badge FROM jogo WHERE 1=1";
 $params = [];
 $tipos = "";
 
@@ -141,8 +133,6 @@ body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,
 .conteudo { flex: 1; padding: 20px; }
 .titulo { text-align: center; border: 2px solid gold; padding: 10px; border-radius: 10px; margin-bottom: 30px;}
 .games { display: flex; gap: 25px; flex-wrap: wrap; justify-content: center; }
-
-/* ATUALIZAÇÃO DOS CARDS PARA SUPORTAR OS EMBLEMAS */
 .card { width: 240px; background: #222; border-radius: 15px; overflow: hidden; transition: .3s; position: relative;}
 .card:hover { transform: scale(1.04); box-shadow: 0 0 15px rgba(255, 215, 0, 0.4); }
 .card img { width: 100%; height: 140px; object-fit: cover; }
@@ -156,7 +146,6 @@ body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,
 .btn-fav { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.6); border: none; font-size: 24px; cursor: pointer; border-radius: 50%; width: 40px; height: 40px; display: flex; justify-content: center; align-items: center; transition: 0.2s; z-index: 20;}
 .btn-fav:hover { background: rgba(0,0,0,0.9); transform: scale(1.1); }
 
-/* ESTILOS DOS EMBLEMAS (BADGES) */
 .badge-faixa { position: absolute; top: 15px; left: -35px; background: #ff4d4d; color: white; padding: 5px 40px; font-size: 12px; font-weight: bold; text-transform: uppercase; transform: rotate(-45deg); box-shadow: 0 2px 4px rgba(0,0,0,0.5); z-index: 10; letter-spacing: 1px; pointer-events: none;}
 .badge-novo { background: #00ff88; color: black; }
 .badge-hot { background: #ff9900; color: black; }
@@ -274,18 +263,15 @@ body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,
             foreach ($jogos_banco as $g) { 
                 $eh_favorito = in_array($g['ID_jogo'], $meus_favoritos);
                 
-                // LÓGICA DINÂMICA DE EMBLEMAS (Baseada no ID para não precisar alterar o Banco)
+                // LÓGICA DO BANCO DE DADOS
                 $emblema = "";
-                if ($g['ID_jogo'] % 5 == 0) {
-                    $emblema = '<div class="badge-faixa badge-hot">🔥 Mais Vendido</div>';
-                } elseif ($g['ID_jogo'] % 3 == 0) {
-                    $emblema = '<div class="badge-faixa">💥 Oferta</div>';
-                } elseif ($g['ID_jogo'] % 2 == 0) {
-                    $emblema = '<div class="badge-faixa badge-novo">✨ Novo</div>';
+                if (!empty($g['Badge'])) {
+                    if ($g['Badge'] === 'oferta') $emblema = '<div class="badge-faixa">💥 Oferta</div>';
+                    elseif ($g['Badge'] === 'novo') $emblema = '<div class="badge-faixa badge-novo">✨ Novo</div>';
+                    elseif ($g['Badge'] === 'hot') $emblema = '<div class="badge-faixa badge-hot">🔥 Top Vendas</div>';
                 }
             ?>
             <div class="card">
-                <!-- RENDERIZA O EMBLEMA AQUI -->
                 <?= $emblema ?>
 
                 <form method="POST" style="margin:0;">

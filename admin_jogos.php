@@ -2,11 +2,24 @@
 session_start();
 require_once 'conexao.php';
 
-// Proteção básica: verifica se o usuário está logado
+// Proteção Avançada: Verifica se está logado e se é Admin (Nível 1)
 if (!isset($_SESSION['ID_Usuario'])) {
     header("Location: login.php");
     exit;
 }
+
+$id_usuario = (int)$_SESSION['ID_Usuario'];
+$stmtAdmin = $conexao->prepare("SELECT Nivel_Acesso FROM usuario WHERE ID_usuario = ?");
+$stmtAdmin->bind_param("i", $id_usuario);
+$stmtAdmin->execute();
+$resAdmin = $stmtAdmin->get_result()->fetch_assoc();
+
+if (!$resAdmin || $resAdmin['Nivel_Acesso'] != 1) {
+    // Se não for admin, é expulso para a tela inicial
+    header("Location: tela_inicial.php");
+    exit;
+}
+$stmtAdmin->close();
 
 $mensagem = "";
 
@@ -127,7 +140,6 @@ button:hover { background: white; }
 <?= $mensagem ?>
 
 <div class="container">
-    <!-- Formulário para Adicionar Jogo -->
     <div class="box">
         <h2>➕ Adicionar Novo Jogo</h2>
         <form method="POST">
@@ -160,7 +172,6 @@ button:hover { background: white; }
         </form>
     </div>
 
-    <!-- Lista de Jogos -->
     <div class="box" style="overflow-x: auto;">
         <h2>🎮 Jogos Cadastrados</h2>
         <table class="tabela-jogos">

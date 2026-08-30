@@ -2,6 +2,16 @@
 session_start();
 require_once 'conexao.php';
 
+// Cria a tabela de favoritos automaticamente caso não exista
+$conexao->query("CREATE TABLE IF NOT EXISTS favoritos (
+    ID_Favorito INT AUTO_INCREMENT PRIMARY KEY,
+    ID_usuario INT NOT NULL,
+    ID_jogo INT NOT NULL,
+    UNIQUE KEY (ID_usuario, ID_jogo),
+    FOREIGN KEY (ID_usuario) REFERENCES usuario(ID_usuario) ON DELETE CASCADE,
+    FOREIGN KEY (ID_jogo) REFERENCES jogo(ID_jogo) ON DELETE CASCADE
+)");
+
 // ADICIONAR AO CARRINHO
 if (isset($_POST['adicionar'])) {
     $nome = $_POST['nome'];
@@ -28,39 +38,67 @@ if (isset($_POST['adicionar'])) {
     exit;
 }
 
-// BUSCAR DADOS DO USUÁRIO LOGADO PARA O HEADER
-$foto_perfil = 'https://via.placeholder.com/45/222222/FFD700?text=User';
-$nome_usuario = '';
-
-if (isset($_SESSION['ID_Usuario'])) {
-    $stmtUser = $conexao->prepare("SELECT Nome, Nome_Exibicao, Foto_Perfil FROM usuario WHERE ID_usuario = ?");
-    $stmtUser->bind_param("i", $_SESSION['ID_Usuario']);
-    $stmtUser->execute();
-    $resUser = $stmtUser->get_result()->fetch_assoc();
-    
-    if ($resUser) {
-        $nome_usuario = !empty($resUser['Nome_Exibicao']) ? $resUser['Nome_Exibicao'] : explode(' ', trim($resUser['Nome']))[0];
-        if (!empty($resUser['Foto_Perfil'])) {
-            $foto_perfil = $resUser['Foto_Perfil'];
-        }
+// ADICIONAR / REMOVER FAVORITO
+if (isset($_POST['favoritar'])) {
+    if (!isset($_SESSION['ID_Usuario'])) {
+        header("Location: login.php");
+        exit;
     }
-    $stmtUser->close();
+    $id_jogo_fav = (int)$_POST['id_jogo'];
+    $id_user = (int)$_SESSION['ID_Usuario'];
+    
+    $check = $conexao->prepare("SELECT ID_Favorito FROM favoritos WHERE ID_usuario = ? AND ID_jogo = ?");
+    $check->bind_param("ii", $id_user, $id_jogo_fav);
+    $check->execute();
+    if ($check->get_result()->num_rows > 0) {
+        $del = $conexao->prepare("DELETE FROM favoritos WHERE ID_usuario = ? AND ID_jogo = ?");
+        $del->bind_param("ii", $id_user, $id_jogo_fav);
+        $del->execute();
+    } else {
+        $ins = $conexao->prepare("INSERT INTO favoritos (ID_usuario, ID_jogo) VALUES (?, ?)");
+        $ins->bind_param("ii", $id_user, $id_jogo_fav);
+        $ins->execute();
+    }
+    // Redireciona mantendo a URL limpa
+    header("Location: tela_inicial.php");
+    exit;
 }
 
-// BUSCAR CATEGORIAS PARA O FILTRO
+// BUSCAR DADOS DO USUÁRIO LOGADO PARA O HEADER E FAVORITOS
+$foto_perfil = 'https://via.placeholder.com/45/222222/FFD700?text=User';
+$nome_usuario = '';
+$meus_favoritos = [];
+
+if (isset($_SESSION['ID_Usuario'])) {
+    $id_u = (int)$_SESSION['ID_Usuario'];
+    // Dados Usuário
+    $stmtUser = $conexao->prepare("SELECT Nome, Nome_Exibicao, Foto_Perfil FROM usuario WHERE ID_usuario = ?");
+    $stmtUser->bind_param("i", $id_u);
+    $stmtUser->execute();
+    $resUser = $stmtUser->get_result()->fetch_assoc();
+    if ($resUser) {
+        $nome_usuario = !empty($resUser['Nome_Exibicao']) ? $resUser['Nome_Exibicao'] : explode(' ', trim($resUser['Nome']))[0];
+        if (!empty($resUser['Foto_Perfil'])) $foto_perfil = $resUser['Foto_Perfil'];
+    }
+    $stmtUser->close();
+    
+    // Lista de IDs favoritados
+    $resFav = $conexao->query("SELECT ID_jogo FROM favoritos WHERE ID_usuario = $id_u");
+    while ($f = $resFav->fetch_assoc()) {
+        $meus_favoritos[] = $f['ID_jogo'];
+    }
+}
+
+// BUSCAR CATEGORIAS E JOGOS...
 $categorias = [];
 $resCat = $conexao->query("SELECT * FROM categoria ORDER BY Nome_Categoria ASC");
 if ($resCat && $resCat->num_rows > 0) {
-    while ($row = $resCat->fetch_assoc()) {
-        $categorias[] = $row;
-    }
+    while ($row = $resCat->fetch_assoc()) $categorias[] = $row;
 }
 
-// CAPTURAR OS FILTROS DA URL
 $busca = $_GET['busca'] ?? '';
 $filtro_categoria = $_GET['categoria'] ?? '';
 
-// MONTAR A CONSULTA DINÂMICA
 $sqlJogos = "SELECT ID_jogo, Nome, Preco_Unitario, Capa FROM jogo WHERE 1=1";
 $params = [];
 $tipos = "";
@@ -70,36 +108,27 @@ if ($busca !== '') {
     $params[] = "%" . $busca . "%";
     $tipos .= "s";
 }
-
 if ($filtro_categoria !== '') {
     $sqlJogos .= " AND ID_Categoria = ?";
     $params[] = $filtro_categoria;
     $tipos .= "i";
 }
-
 $sqlJogos .= " ORDER BY ID_jogo DESC";
 
-// PREPARAR E EXECUTAR
 $stmt = $conexao->prepare($sqlJogos);
-if (!empty($params)) {
-    $stmt->bind_param($tipos, ...$params);
-}
+if (!empty($params)) $stmt->bind_param($tipos, ...$params);
 $stmt->execute();
 $resultado = $stmt->get_result();
 
 $jogos_banco = [];
 if ($resultado && $resultado->num_rows > 0) {
-    while ($row = $resultado->fetch_assoc()) {
-        $jogos_banco[] = $row;
-    }
+    while ($row = $resultado->fetch_assoc()) $jogos_banco[] = $row;
 }
 $stmt->close();
 
 $qtdCarrinho = 0;
 if (isset($_SESSION['carrinho'])) {
-    foreach ($_SESSION['carrinho'] as $item) {
-        $qtdCarrinho += $item['quantidade'];
-    }
+    foreach ($_SESSION['carrinho'] as $item) $qtdCarrinho += $item['quantidade'];
 }
 ?>
 
@@ -113,13 +142,10 @@ if (isset($_SESSION['carrinho'])) {
 body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,#1b2838,#0f141a); color: #FFD700; }
 .topo { display: flex; justify-content: center; align-items: center; position: relative; padding: 20px; background: #111; }
 .logo { font-size: 42px; font-weight: bold; border: 3px solid gold; padding: 10px 30px; border-radius: 12px; }
-
-/* ESTILOS DO PERFIL NO HEADER */
 .perfil-topo { position: absolute; left: 20px; display: flex; align-items: center; gap: 12px; text-decoration: none; color: white; transition: 0.3s; }
 .perfil-topo:hover { color: gold; transform: scale(1.05); }
 .perfil-topo img { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 2px solid gold; }
 .perfil-topo span { font-weight: bold; font-size: 16px; }
-
 .auth { position: absolute; right: 20px; }
 .auth button, .auth a.btn { padding: 10px 20px; border: 0; border-radius: 10px; font-weight: bold; cursor: pointer; text-decoration: none;}
 .login { background: #222; color: gold; }
@@ -134,7 +160,7 @@ body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,
 .conteudo { flex: 1; padding: 20px; }
 .titulo { text-align: center; border: 2px solid gold; padding: 10px; border-radius: 10px; }
 .games { display: flex; gap: 25px; flex-wrap: wrap; justify-content: center; }
-.card { width: 240px; background: #222; border-radius: 15px; overflow: hidden; transition: .3s; }
+.card { width: 240px; background: #222; border-radius: 15px; overflow: hidden; transition: .3s; position: relative;}
 .card:hover { transform: scale(1.04); box-shadow: 0 0 15px rgba(255, 215, 0, 0.4); }
 .card img { width: 100%; height: 140px; object-fit: cover; }
 .card-content { padding: 15px; }
@@ -146,20 +172,21 @@ body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,
 .add:hover { background: white; }
 .carrinho { color: gold; text-decoration: none; font-weight: bold; margin-right: 15px; }
 
-/* ESTILOS DA BARRA DE BUSCA */
+/* ESTILOS DA BARRA DE BUSCA E FAVORITOS */
 .barra-busca { display: flex; justify-content: center; gap: 10px; margin-bottom: 30px; background: #111; padding: 15px; border-radius: 10px; }
-.barra-busca input[type="text"] { flex: 1; max-width: 400px; padding: 12px; border-radius: 8px; border: 1px solid #444; background: #222; color: white; font-size: 16px; }
-.barra-busca select { padding: 12px; border-radius: 8px; border: 1px solid #444; background: #222; color: white; font-size: 16px; }
+.barra-busca input[type="text"], .barra-busca select { padding: 12px; border-radius: 8px; border: 1px solid #444; background: #222; color: white; font-size: 16px; }
+.barra-busca input[type="text"] { flex: 1; max-width: 400px; }
 .barra-busca button { padding: 12px 25px; background: gold; color: black; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 16px; }
 .barra-busca button:hover { background: white; }
 .limpar-busca { color: #aaa; text-decoration: none; display: flex; align-items: center; padding: 0 10px; }
 .limpar-busca:hover { color: gold; }
+.btn-fav { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.6); border: none; font-size: 24px; cursor: pointer; border-radius: 50%; width: 40px; height: 40px; display: flex; justify-content: center; align-items: center; transition: 0.2s;}
+.btn-fav:hover { background: rgba(0,0,0,0.9); transform: scale(1.1); }
 </style>
 </head>
 <body>
 
 <header class="topo">
-    <!-- FOTO E NOME DO USUÁRIO NO CANTO SUPERIOR ESQUERDO -->
     <?php if (isset($_SESSION['ID_Usuario'])): ?>
         <a href="Usuario.php" class="perfil-topo">
             <img src="<?= htmlspecialchars($foto_perfil) ?>" alt="Avatar">
@@ -182,7 +209,6 @@ body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,
             $stmtAd->close();
         }
         ?>
-
         <a href="carrinho.php" class="carrinho">🛒 Carrinho (<?= $qtdCarrinho ?>)</a>
         <?php if (!isset($_SESSION['ID_Usuario'])) { ?>
             <a href="login.php"><button class="login">Login</button></a>
@@ -198,6 +224,7 @@ body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,
     <ul>
         <li><a href="Usuario.php">👤 Minha Conta</a></li>
         <li><a href="biblioteca.php">📚 Biblioteca</a></li>
+        <li><a href="favoritos.php">❤️ Favoritos</a></li>
         <li><a href="configuração.php">⚙️ Configurações</a></li>
     </ul>
 </aside>
@@ -223,8 +250,18 @@ body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,
 
     <div class="games">
         <?php if (count($jogos_banco) > 0) {
-            foreach ($jogos_banco as $g) { ?>
+            foreach ($jogos_banco as $g) { 
+                $eh_favorito = in_array($g['ID_jogo'], $meus_favoritos);
+            ?>
             <div class="card">
+                <!-- Botão de Favoritar no Canto da Imagem -->
+                <form method="POST" style="margin:0;">
+                    <input type="hidden" name="id_jogo" value="<?= $g['ID_jogo'] ?>">
+                    <button type="submit" name="favoritar" class="btn-fav" title="<?= $eh_favorito ? 'Remover dos Favoritos' : 'Adicionar aos Favoritos' ?>">
+                        <?= $eh_favorito ? '❤️' : '🤍' ?>
+                    </button>
+                </form>
+
                 <img src="<?= htmlspecialchars($g['Capa']) ?>" onerror="this.src='https://via.placeholder.com/300x150/111111/FFD700?text=Sem+Capa'">
                 <div class="card-content">
                     <h3><?= htmlspecialchars($g['Nome']) ?></h3>

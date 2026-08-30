@@ -2,7 +2,6 @@
 session_start();
 require_once 'conexao.php';
 
-// Cria a tabela de favoritos automaticamente caso não exista
 $conexao->query("CREATE TABLE IF NOT EXISTS favoritos (
     ID_Favorito INT AUTO_INCREMENT PRIMARY KEY,
     ID_usuario INT NOT NULL,
@@ -12,15 +11,12 @@ $conexao->query("CREATE TABLE IF NOT EXISTS favoritos (
     FOREIGN KEY (ID_jogo) REFERENCES jogo(ID_jogo) ON DELETE CASCADE
 )");
 
-// ADICIONAR AO CARRINHO
 if (isset($_POST['adicionar'])) {
     $nome = $_POST['nome'];
     $preco = (float)$_POST['preco'];
     $img = $_POST['img'];
 
-    if (!isset($_SESSION['carrinho'])) {
-        $_SESSION['carrinho'] = [];
-    }
+    if (!isset($_SESSION['carrinho'])) $_SESSION['carrinho'] = [];
 
     $existe = false;
     foreach ($_SESSION['carrinho'] as &$item) {
@@ -30,20 +26,14 @@ if (isset($_POST['adicionar'])) {
             break;
         }
     }
-
-    if (!$existe) {
-        $_SESSION['carrinho'][] = ["nome" => $nome, "preco" => $preco, "img" => $img, "quantidade" => 1];
-    }
+    if (!$existe) $_SESSION['carrinho'][] = ["nome" => $nome, "preco" => $preco, "img" => $img, "quantidade" => 1];
+    
     header("Location: tela_inicial.php");
     exit;
 }
 
-// ADICIONAR / REMOVER FAVORITO
 if (isset($_POST['favoritar'])) {
-    if (!isset($_SESSION['ID_Usuario'])) {
-        header("Location: login.php");
-        exit;
-    }
+    if (!isset($_SESSION['ID_Usuario'])) { header("Location: login.php"); exit; }
     $id_jogo_fav = (int)$_POST['id_jogo'];
     $id_user = (int)$_SESSION['ID_Usuario'];
     
@@ -63,7 +53,6 @@ if (isset($_POST['favoritar'])) {
     exit;
 }
 
-// BUSCAR DADOS DO USUÁRIO LOGADO PARA O HEADER E FAVORITOS
 $foto_perfil = 'https://via.placeholder.com/45/222222/FFD700?text=User';
 $nome_usuario = '';
 $meus_favoritos = [];
@@ -81,23 +70,16 @@ if (isset($_SESSION['ID_Usuario'])) {
     $stmtUser->close();
     
     $resFav = $conexao->query("SELECT ID_jogo FROM favoritos WHERE ID_usuario = $id_u");
-    while ($f = $resFav->fetch_assoc()) {
-        $meus_favoritos[] = $f['ID_jogo'];
-    }
+    while ($f = $resFav->fetch_assoc()) $meus_favoritos[] = $f['ID_jogo'];
 }
 
-// BUSCAR CATEGORIAS
 $categorias = [];
 $resCat = $conexao->query("SELECT * FROM categoria ORDER BY Nome_Categoria ASC");
-if ($resCat && $resCat->num_rows > 0) {
-    while ($row = $resCat->fetch_assoc()) $categorias[] = $row;
-}
+if ($resCat) while ($row = $resCat->fetch_assoc()) $categorias[] = $row;
 
-// FILTROS DA URL
 $busca = $_GET['busca'] ?? '';
 $filtro_categoria = $_GET['categoria'] ?? '';
 
-// BUSCAR JOGOS PARA A VITRINE
 $sqlJogos = "SELECT ID_jogo, Nome, Preco_Unitario, Capa FROM jogo WHERE 1=1";
 $params = [];
 $tipos = "";
@@ -118,19 +100,13 @@ $stmt = $conexao->prepare($sqlJogos);
 if (!empty($params)) $stmt->bind_param($tipos, ...$params);
 $stmt->execute();
 $resultado = $stmt->get_result();
-
 $jogos_banco = [];
-if ($resultado && $resultado->num_rows > 0) {
-    while ($row = $resultado->fetch_assoc()) $jogos_banco[] = $row;
-}
+if ($resultado) while ($row = $resultado->fetch_assoc()) $jogos_banco[] = $row;
 $stmt->close();
 
-// BUSCAR JOGOS DE DESTAQUE (Últimos 3 cadastrados) PARA O BANNER
 $jogos_destaque = [];
 $resDestaque = $conexao->query("SELECT ID_jogo, Nome, Preco_Unitario, Capa FROM jogo ORDER BY ID_jogo DESC LIMIT 3");
-if ($resDestaque && $resDestaque->num_rows > 0) {
-    while ($row = $resDestaque->fetch_assoc()) $jogos_destaque[] = $row;
-}
+if ($resDestaque) while ($row = $resDestaque->fetch_assoc()) $jogos_destaque[] = $row;
 
 $qtdCarrinho = 0;
 if (isset($_SESSION['carrinho'])) {
@@ -151,7 +127,6 @@ body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,
 .perfil-topo { position: absolute; left: 20px; display: flex; align-items: center; gap: 12px; text-decoration: none; color: white; transition: 0.3s; }
 .perfil-topo:hover { color: gold; transform: scale(1.05); }
 .perfil-topo img { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 2px solid gold; }
-.perfil-topo span { font-weight: bold; font-size: 16px; }
 .auth { position: absolute; right: 20px; }
 .auth button, .auth a.btn { padding: 10px 20px; border: 0; border-radius: 10px; font-weight: bold; cursor: pointer; text-decoration: none;}
 .login { background: #222; color: gold; }
@@ -166,6 +141,8 @@ body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,
 .conteudo { flex: 1; padding: 20px; }
 .titulo { text-align: center; border: 2px solid gold; padding: 10px; border-radius: 10px; margin-bottom: 30px;}
 .games { display: flex; gap: 25px; flex-wrap: wrap; justify-content: center; }
+
+/* ATUALIZAÇÃO DOS CARDS PARA SUPORTAR OS EMBLEMAS */
 .card { width: 240px; background: #222; border-radius: 15px; overflow: hidden; transition: .3s; position: relative;}
 .card:hover { transform: scale(1.04); box-shadow: 0 0 15px rgba(255, 215, 0, 0.4); }
 .card img { width: 100%; height: 140px; object-fit: cover; }
@@ -176,18 +153,23 @@ body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,
 .detalhes:hover { background: #555; }
 .add { width: 100%; padding: 10px; background: gold; color: black; border: 0; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 8px; transition: 0.3s; }
 .add:hover { background: white; }
+.btn-fav { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.6); border: none; font-size: 24px; cursor: pointer; border-radius: 50%; width: 40px; height: 40px; display: flex; justify-content: center; align-items: center; transition: 0.2s; z-index: 20;}
+.btn-fav:hover { background: rgba(0,0,0,0.9); transform: scale(1.1); }
+
+/* ESTILOS DOS EMBLEMAS (BADGES) */
+.badge-faixa { position: absolute; top: 15px; left: -35px; background: #ff4d4d; color: white; padding: 5px 40px; font-size: 12px; font-weight: bold; text-transform: uppercase; transform: rotate(-45deg); box-shadow: 0 2px 4px rgba(0,0,0,0.5); z-index: 10; letter-spacing: 1px; pointer-events: none;}
+.badge-novo { background: #00ff88; color: black; }
+.badge-hot { background: #ff9900; color: black; }
+
 .carrinho { color: gold; text-decoration: none; font-weight: bold; margin-right: 15px; }
 .barra-busca { display: flex; justify-content: center; gap: 10px; margin-bottom: 30px; background: #111; padding: 15px; border-radius: 10px; }
-.barra-busca input[type="text"], .barra-busca select { padding: 12px; border-radius: 8px; border: 1px solid #444; background: #222; color: white; font-size: 16px; }
-.barra-busca input[type="text"] { flex: 1; max-width: 400px; }
+.barra-busca input, .barra-busca select { padding: 12px; border-radius: 8px; border: 1px solid #444; background: #222; color: white; font-size: 16px; }
+.barra-busca input { flex: 1; max-width: 400px; }
 .barra-busca button { padding: 12px 25px; background: gold; color: black; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 16px; }
 .barra-busca button:hover { background: white; }
 .limpar-busca { color: #aaa; text-decoration: none; display: flex; align-items: center; padding: 0 10px; }
 .limpar-busca:hover { color: gold; }
-.btn-fav { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.6); border: none; font-size: 24px; cursor: pointer; border-radius: 50%; width: 40px; height: 40px; display: flex; justify-content: center; align-items: center; transition: 0.2s;}
-.btn-fav:hover { background: rgba(0,0,0,0.9); transform: scale(1.1); }
 
-/* ESTILOS DO BANNER DE DESTAQUE */
 .hero-banner { position: relative; width: 100%; max-width: 1000px; height: 350px; margin: 0 auto 40px; border-radius: 15px; overflow: hidden; box-shadow: 0 5px 20px rgba(0,0,0,0.5); border: 2px solid #333; }
 .hero-slide { display: none; width: 100%; height: 100%; position: relative; }
 .hero-slide.ativo { display: block; animation: fade 1s; }
@@ -212,9 +194,7 @@ body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,
             <span><?= htmlspecialchars($nome_usuario) ?></span>
         </a>
     <?php endif; ?>
-
     <div class="logo">Legends_Games</div>
-    
     <div class="auth">
         <?php 
         if (isset($_SESSION['ID_Usuario'])) {
@@ -222,19 +202,17 @@ body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,
             $stmtAd->bind_param("i", $_SESSION['ID_Usuario']);
             $stmtAd->execute();
             $resAd = $stmtAd->get_result()->fetch_assoc();
-            if ($resAd && $resAd['Nivel_Acesso'] == 1) {
-                echo '<a href="admin_jogos.php" class="btn admin-btn">⚙️ Admin</a>';
-            }
+            if ($resAd && $resAd['Nivel_Acesso'] == 1) echo '<a href="admin_jogos.php" class="btn admin-btn">⚙️ Admin</a>';
             $stmtAd->close();
         }
         ?>
         <a href="carrinho.php" class="carrinho">🛒 Carrinho (<?= $qtdCarrinho ?>)</a>
-        <?php if (!isset($_SESSION['ID_Usuario'])) { ?>
+        <?php if (!isset($_SESSION['ID_Usuario'])): ?>
             <a href="login.php"><button class="login">Login</button></a>
             <a href="cadastro.php"><button class="cadastro">Cadastrar</button></a>
-        <?php } else { ?>
+        <?php else: ?>
              <a href="logout.php"><button class="login">Sair</button></a>
-        <?php } ?>
+        <?php endif; ?>
     </div>
 </header>
 
@@ -266,12 +244,11 @@ body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,
         <?php endif; ?>
     </form>
 
-    <!-- BANNER HERO DE DESTAQUES (Só aparece se o usuário não estiver usando a busca) -->
     <?php if (($busca === '' && $filtro_categoria === '') && count($jogos_destaque) > 0): ?>
     <div class="hero-banner">
         <?php foreach($jogos_destaque as $i => $jd): ?>
             <div class="hero-slide <?= $i === 0 ? 'ativo' : '' ?>">
-                <img src="<?= htmlspecialchars($jd['Capa']) ?>" onerror="this.src='https://via.placeholder.com/1000x350/111111/FFD700?text=Capa'">
+                <img src="<?= htmlspecialchars($jd['Capa']) ?>" onerror="this.src='https://via.placeholder.com/1000x350'">
                 <div class="hero-overlay">
                     <div class="hero-info">
                         <h2><?= htmlspecialchars($jd['Nome']) ?></h2>
@@ -281,7 +258,6 @@ body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,
                 </div>
             </div>
         <?php endforeach; ?>
-        
         <?php if(count($jogos_destaque) > 1): ?>
         <div class="hero-nav">
             <button class="hero-seta" onclick="mudarSlide(-1)">❮</button>
@@ -297,8 +273,21 @@ body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,
         <?php if (count($jogos_banco) > 0) {
             foreach ($jogos_banco as $g) { 
                 $eh_favorito = in_array($g['ID_jogo'], $meus_favoritos);
+                
+                // LÓGICA DINÂMICA DE EMBLEMAS (Baseada no ID para não precisar alterar o Banco)
+                $emblema = "";
+                if ($g['ID_jogo'] % 5 == 0) {
+                    $emblema = '<div class="badge-faixa badge-hot">🔥 Mais Vendido</div>';
+                } elseif ($g['ID_jogo'] % 3 == 0) {
+                    $emblema = '<div class="badge-faixa">💥 Oferta</div>';
+                } elseif ($g['ID_jogo'] % 2 == 0) {
+                    $emblema = '<div class="badge-faixa badge-novo">✨ Novo</div>';
+                }
             ?>
             <div class="card">
+                <!-- RENDERIZA O EMBLEMA AQUI -->
+                <?= $emblema ?>
+
                 <form method="POST" style="margin:0;">
                     <input type="hidden" name="id_jogo" value="<?= $g['ID_jogo'] ?>">
                     <button type="submit" name="favoritar" class="btn-fav" title="Favoritos">
@@ -306,7 +295,7 @@ body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,
                     </button>
                 </form>
 
-                <img src="<?= htmlspecialchars($g['Capa']) ?>" onerror="this.src='https://via.placeholder.com/300x150/111111/FFD700?text=Sem+Capa'">
+                <img src="<?= htmlspecialchars($g['Capa']) ?>" onerror="this.src='https://via.placeholder.com/300x150'">
                 <div class="card-content">
                     <h3><?= htmlspecialchars($g['Nome']) ?></h3>
                     <p class="preco">R$ <?= number_format($g['Preco_Unitario'], 2, ',', '.') ?></p>
@@ -319,13 +308,12 @@ body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,
                     </form>
                 </div>
             </div>
-        <?php } } else { echo "<p style='color: white; text-align: center; width: 100%;'>Nenhum jogo encontrado para esta busca.</p>"; } ?>
+        <?php } } else { echo "<p style='color: white; text-align: center; width: 100%;'>Nenhum jogo encontrado.</p>"; } ?>
     </div>
 </main>
 </div>
 
 <script>
-// SCRIPT PARA RODAR O CARROSSEL HERO AUTOMATICAMENTE
 let slideAtual = 0;
 const slides = document.querySelectorAll('.hero-slide');
 let timerCarrossel;
@@ -349,9 +337,7 @@ function resetarTimer() {
     timerCarrossel = setInterval(() => mudarSlide(1), 5000);
 }
 
-if(slides.length > 1) {
-    resetarTimer();
-}
+if(slides.length > 1) resetarTimer();
 </script>
 
 </body>

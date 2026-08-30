@@ -12,7 +12,7 @@ $mensagem = "";
 
 $conexao->query("ALTER TABLE usuario ADD COLUMN IF NOT EXISTS Nome_Exibicao VARCHAR(100) DEFAULT NULL");
 $conexao->query("ALTER TABLE usuario ADD COLUMN IF NOT EXISTS Foto_Perfil VARCHAR(255) DEFAULT NULL");
-
+$conexao->query("ALTER TABLE usuario ADD COLUMN IF NOT EXISTS Data_Cadastro DATETIME DEFAULT CURRENT_TIMESTAMP");
 $diretorio_uploads = 'uploads/';
 if (!is_dir($diretorio_uploads)) mkdir($diretorio_uploads, 0777, true);
 

@@ -28,6 +28,25 @@ if (isset($_POST['adicionar'])) {
     exit;
 }
 
+// BUSCAR DADOS DO USUÁRIO LOGADO PARA O HEADER
+$foto_perfil = 'https://via.placeholder.com/45/222222/FFD700?text=User';
+$nome_usuario = '';
+
+if (isset($_SESSION['ID_Usuario'])) {
+    $stmtUser = $conexao->prepare("SELECT Nome, Nome_Exibicao, Foto_Perfil FROM usuario WHERE ID_usuario = ?");
+    $stmtUser->bind_param("i", $_SESSION['ID_Usuario']);
+    $stmtUser->execute();
+    $resUser = $stmtUser->get_result()->fetch_assoc();
+    
+    if ($resUser) {
+        $nome_usuario = !empty($resUser['Nome_Exibicao']) ? $resUser['Nome_Exibicao'] : explode(' ', trim($resUser['Nome']))[0];
+        if (!empty($resUser['Foto_Perfil'])) {
+            $foto_perfil = $resUser['Foto_Perfil'];
+        }
+    }
+    $stmtUser->close();
+}
+
 // BUSCAR CATEGORIAS PARA O FILTRO
 $categorias = [];
 $resCat = $conexao->query("SELECT * FROM categoria ORDER BY Nome_Categoria ASC");
@@ -94,6 +113,13 @@ if (isset($_SESSION['carrinho'])) {
 body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,#1b2838,#0f141a); color: #FFD700; }
 .topo { display: flex; justify-content: center; align-items: center; position: relative; padding: 20px; background: #111; }
 .logo { font-size: 42px; font-weight: bold; border: 3px solid gold; padding: 10px 30px; border-radius: 12px; }
+
+/* ESTILOS DO PERFIL NO HEADER */
+.perfil-topo { position: absolute; left: 20px; display: flex; align-items: center; gap: 12px; text-decoration: none; color: white; transition: 0.3s; }
+.perfil-topo:hover { color: gold; transform: scale(1.05); }
+.perfil-topo img { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 2px solid gold; }
+.perfil-topo span { font-weight: bold; font-size: 16px; }
+
 .auth { position: absolute; right: 20px; }
 .auth button, .auth a.btn { padding: 10px 20px; border: 0; border-radius: 10px; font-weight: bold; cursor: pointer; text-decoration: none;}
 .login { background: #222; color: gold; }
@@ -133,9 +159,17 @@ body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,
 <body>
 
 <header class="topo">
+    <!-- FOTO E NOME DO USUÁRIO NO CANTO SUPERIOR ESQUERDO -->
+    <?php if (isset($_SESSION['ID_Usuario'])): ?>
+        <a href="Usuario.php" class="perfil-topo">
+            <img src="<?= htmlspecialchars($foto_perfil) ?>" alt="Avatar">
+            <span><?= htmlspecialchars($nome_usuario) ?></span>
+        </a>
+    <?php endif; ?>
+
     <div class="logo">Legends_Games</div>
+    
     <div class="auth">
-        <!-- Verifica se é Admin para mostrar o botão do painel -->
         <?php 
         if (isset($_SESSION['ID_Usuario'])) {
             $stmtAd = $conexao->prepare("SELECT Nivel_Acesso FROM usuario WHERE ID_usuario = ?");
@@ -171,7 +205,6 @@ body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,
 <main class="conteudo">
     <h1 class="titulo">NOSSOS JOGOS</h1>
 
-    <!-- FORMULÁRIO DE BUSCA E FILTRO -->
     <form class="barra-busca" method="GET" action="tela_inicial.php">
         <input type="text" name="busca" placeholder="Buscar jogo..." value="<?= htmlspecialchars($busca) ?>">
         <select name="categoria">

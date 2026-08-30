@@ -11,6 +11,8 @@ $conexao->query("CREATE TABLE IF NOT EXISTS favoritos (
     FOREIGN KEY (ID_jogo) REFERENCES jogo(ID_jogo) ON DELETE CASCADE
 )");
 
+$conexao->query("ALTER TABLE jogo ADD COLUMN IF NOT EXISTS Badge VARCHAR(50) DEFAULT ''");
+
 if (isset($_POST['adicionar'])) {
     $nome = $_POST['nome'];
     $preco = (float)$_POST['preco'];

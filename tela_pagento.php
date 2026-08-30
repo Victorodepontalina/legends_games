@@ -1,312 +1,159 @@
 <?php
-
 session_start();
-
 require_once 'conexao.php';
-
 $conn->set_charset("utf8mb4");
 
-/* =========================================================
-   USUÁRIO
-========================================================= */
-
-// Verifica se a pessoa está logada antes de deixar pagar
 if (!isset($_SESSION["ID_Usuario"])) {
     header("Location: login.php");
     exit;
 }
 
-// Pega o ID do usuário real que fez o login
 $id_usuario = (int)$_SESSION["ID_Usuario"];
-
-/* =========================================================
-   GARANTIR QUE O CARRINHO EXISTE
-========================================================= */
-
-if (!isset($_SESSION['carrinho'])) {
-    $_SESSION['carrinho'] = [];
-}
-
-/* =========================================================
-   VARIÁVEIS
-========================================================= */
+if (!isset($_SESSION['carrinho'])) $_SESSION['carrinho'] = [];
 
 $itens = [];
-
 $total = 0;
 $total_original = 0;
-
 $erro = "";
-
 $sucesso = false;
-
 $forma_pagamento = "";
-
 $autenticacao = "";
-
 $codigo_pix = "";
-
 $id_pagamento = 0;
-
 $quantidade_adicionados = 0;
 
-/* =========================================================
-   VERIFICAR SE É ADMINISTRADOR
-========================================================= */
 $eh_admin = false;
 $stmtAdmin = $conn->prepare("SELECT Nivel_Acesso FROM usuario WHERE ID_usuario = ? LIMIT 1");
 if ($stmtAdmin) {
     $stmtAdmin->bind_param("i", $id_usuario);
     $stmtAdmin->execute();
     $resAdmin = $stmtAdmin->get_result()->fetch_assoc();
-    if ($resAdmin && isset($resAdmin['Nivel_Acesso']) && $resAdmin['Nivel_Acesso'] == 1) {
-        $eh_admin = true;
-    }
+    if ($resAdmin && isset($resAdmin['Nivel_Acesso']) && $resAdmin['Nivel_Acesso'] == 1) $eh_admin = true;
     $stmtAdmin->close();
 }
 
-/* =========================================================
-   LER CARRINHO DA SESSÃO
-========================================================= */
-
 foreach ($_SESSION['carrinho'] as $indice => $item) {
-
     $nome = isset($item['nome']) ? trim($item['nome']) : 'Jogo';
     $preco = isset($item['preco']) ? (float)$item['preco'] : 0;
     $img = isset($item['img']) ? $item['img'] : '';
     $quantidade = isset($item['quantidade']) ? (int)$item['quantidade'] : 1;
-
-    if ($quantidade < 1) {
-        $quantidade = 1;
-    }
+    if ($quantidade < 1) $quantidade = 1;
 
     $id_jogo = 0;
-
     $sqlJogo = "SELECT * FROM jogo WHERE Nome = ? LIMIT 1";
     $stmtJogo = $conn->prepare($sqlJogo);
-
     if ($stmtJogo) {
         $stmtJogo->bind_param("s", $nome);
         $stmtJogo->execute();
-        $resultadoJogo = $stmtJogo->get_result();
-
-        if ($resultadoJogo->num_rows > 0) {
-            $jogo = $resultadoJogo->fetch_assoc();
-            $id_jogo = isset($jogo['ID_jogo']) ? (int)$jogo['ID_jogo'] : 0;
-
-            if ($preco <= 0) {
-                if (isset($jogo['Preco'])) {
-                    $preco = (float)$jogo['Preco'];
-                } elseif (isset($jogo['preco'])) {
-                    $preco = (float)$jogo['preco'];
-                } elseif (isset($jogo['Preco_Unitario'])) {
-                    $preco = (float)$jogo['Preco_Unitario'];
-                } elseif (isset($jogo['preco_unitario'])) {
-                    $preco = (float)$jogo['preco_unitario'];
-                } elseif (isset($jogo['Valor'])) {
-                    $preco = (float)$jogo['Valor'];
-                } elseif (isset($jogo['valor'])) {
-                    $preco = (float)$jogo['valor'];
-                }
-            }
+        $resJogo = $stmtJogo->get_result();
+        if ($resJogo->num_rows > 0) {
+            $jogo = $resJogo->fetch_assoc();
+            $id_jogo = (int)$jogo['ID_jogo'];
+            if ($preco <= 0) $preco = (float)($jogo['Preco_Unitario'] ?? $jogo['Preco'] ?? 0);
         }
         $stmtJogo->close();
     }
-
-    if ($id_jogo <= 0) {
-        $possiveisNomes = ['nome', 'Nome_Jogo', 'nome_jogo', 'Titulo', 'titulo'];
-        foreach ($possiveisNomes as $campo) {
-            $sql = "SELECT * FROM jogo WHERE `$campo` = ? LIMIT 1";
-            $stmt = @$conn->prepare($sql);
-            if (!$stmt) continue;
-
-            $stmt->bind_param("s", $nome);
-            $stmt->execute();
-            $resultado = $stmt->get_result();
-
-            if ($resultado->num_rows > 0) {
-                $jogo = $resultado->fetch_assoc();
-                if (isset($jogo['ID_jogo'])) {
-                    $id_jogo = (int)$jogo['ID_jogo'];
-                }
-                if ($preco <= 0) {
-                    if (isset($jogo['Preco'])) {
-                        $preco = (float)$jogo['Preco'];
-                    } elseif (isset($jogo['preco'])) {
-                        $preco = (float)$jogo['preco'];
-                    }
-                }
-                $stmt->close();
-                break;
-            }
-            $stmt->close();
-        }
-    }
-
+    
     $subtotal = $preco * $quantidade;
     $total += $subtotal;
-
-    $itens[] = [
-        'indice' => $indice,
-        'id_jogo' => $id_jogo,
-        'nome' => $nome,
-        'preco' => $preco,
-        'img' => $img,
-        'quantidade' => $quantidade,
-        'subtotal' => $subtotal
-    ];
+    $itens[] = ['indice' => $indice, 'id_jogo' => $id_jogo, 'nome' => $nome, 'preco' => $preco, 'img' => $img, 'quantidade' => $quantidade, 'subtotal' => $subtotal];
 }
 
 $total_original = $total;
-if ($eh_admin) {
-    $total = 0;
+$desconto_aplicado = 0;
+$mensagem_cupom = "";
+
+// APLICAR OU REMOVER CUPOM
+if (isset($_POST['aplicar_cupom'])) {
+    $codigo = strtoupper(trim($_POST['codigo_cupom']));
+    $stmt = $conn->prepare("SELECT Desconto FROM cupom WHERE Codigo = ? AND Ativo = 1");
+    if($stmt){
+        $stmt->bind_param("s", $codigo);
+        $stmt->execute();
+        $res = $stmt->get_result()->fetch_assoc();
+        if($res){
+            $_SESSION['cupom'] = ['codigo' => $codigo, 'desconto' => $res['Desconto']];
+            $mensagem_cupom = "<div style='color:#00ff88; margin-bottom:10px; font-weight:bold;'>✅ Cupom aplicado com sucesso!</div>";
+        } else {
+            $mensagem_cupom = "<div style='color:#ff4d4d; margin-bottom:10px; font-weight:bold;'>❌ Cupom inválido ou expirado.</div>";
+        }
+        $stmt->close();
+    }
+}
+if (isset($_POST['remover_cupom'])) {
+    unset($_SESSION['cupom']);
 }
 
-/* =========================================================
-   PROCESSAR PAGAMENTO
-========================================================= */
+// CALCULAR ABATIMENTO
+if (isset($_SESSION['cupom']) && !$eh_admin) {
+    $desconto_aplicado = $total * ($_SESSION['cupom']['desconto'] / 100);
+    $total -= $desconto_aplicado;
+}
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($eh_admin) $total = 0;
 
-    if ($eh_admin) {
-        $forma_pagamento = "Resgate Admin";
-    } else {
-        $forma_pagamento = trim($_POST['forma_pagamento'] ?? '');
-    }
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['finalizar_compra'])) {
+    if ($eh_admin) $forma_pagamento = "Resgate Admin";
+    else $forma_pagamento = trim($_POST['forma_pagamento'] ?? '');
 
-    if (count($itens) === 0) {
-        $erro = "Seu carrinho está vazio. Volte ao carrinho e adicione um jogo.";
-    }
-
-    if ($erro === "") {
-        foreach ($itens as $item) {
-            if ((int)$item['id_jogo'] <= 0) {
-                $erro = "Não foi possível identificar o jogo \"" . $item['nome'] . "\" no banco de dados.";
-                break;
-            }
-        }
-    }
-
+    if (count($itens) === 0) $erro = "Seu carrinho está vazio.";
+    
     if ($erro === "" && !$eh_admin) {
-        if ($forma_pagamento !== "Cartão" && $forma_pagamento !== "PIX") {
-            $erro = "Escolha uma forma de pagamento.";
-        }
-    }
-
-    if ($erro === "" && !$eh_admin && $forma_pagamento === "Cartão") {
-        $nome_cartao = trim($_POST['nome_cartao'] ?? '');
-        $numero_cartao = preg_replace('/\D/', '', $_POST['numero_cartao'] ?? '');
-        $validade = trim($_POST['validade'] ?? '');
-        $cvv = preg_replace('/\D/', '', $_POST['cvv'] ?? '');
-
-        if ($nome_cartao === '') {
-            $erro = "Informe o nome do titular do cartão.";
-        } elseif (strlen($numero_cartao) < 13) {
-            $erro = "Número do cartão inválido.";
-        } elseif (strlen($validade) < 5) {
-            $erro = "Informe a validade do cartão.";
-        } elseif (strlen($cvv) < 3) {
-            $erro = "Informe o CVV do cartão.";
+        if ($forma_pagamento !== "Cartão" && $forma_pagamento !== "PIX") $erro = "Escolha uma forma de pagamento.";
+        elseif ($forma_pagamento === "Cartão") {
+            if (empty(trim($_POST['nome_cartao'] ?? ''))) $erro = "Informe o nome do titular do cartão.";
+            elseif (strlen(preg_replace('/\D/', '', $_POST['numero_cartao'] ?? '')) < 13) $erro = "Número do cartão inválido.";
         }
     }
 
     if ($erro === "") {
         try {
             $conn->begin_transaction();
-
             $autenticacao = "LG-" . date("YmdHis") . "-" . strtoupper(substr(bin2hex(random_bytes(5)), 0, 8));
-
-            $sqlPagamento = "INSERT INTO pagamento (Forma_Pagamento, Autenticacao) VALUES (?, ?)";
-            $stmtPagamento = $conn->prepare($sqlPagamento);
-
-            if (!$stmtPagamento) {
-                throw new Exception("Erro ao preparar pagamento: " . $conn->error);
-            }
-
+            
+            $stmtPagamento = $conn->prepare("INSERT INTO pagamento (Forma_Pagamento, Autenticacao) VALUES (?, ?)");
             $stmtPagamento->bind_param("ss", $forma_pagamento, $autenticacao);
-
-            if (!$stmtPagamento->execute()) {
-                throw new Exception("Erro ao registrar pagamento: " . $stmtPagamento->error);
-            }
-
+            $stmtPagamento->execute();
             $id_pagamento = $conn->insert_id;
             $stmtPagamento->close();
 
             foreach ($itens as $item) {
                 $id_jogo = (int)$item['id_jogo'];
-
-                if ($id_jogo <= 0) {
-                    throw new Exception("Não foi possível identificar o jogo: " . $item['nome']);
-                }
-
-                $sqlVerifica = "SELECT ID_Biblioteca FROM biblioteca WHERE ID_usuario = ? AND ID_jogo = ? LIMIT 1";
-                $stmtVerifica = $conn->prepare($sqlVerifica);
-
-                if (!$stmtVerifica) {
-                    throw new Exception("Erro ao verificar biblioteca: " . $conn->error);
-                }
-
-                $stmtVerifica->bind_param("ii", $id_usuario, $id_jogo);
-                $stmtVerifica->execute();
-                $resultado = $stmtVerifica->get_result();
-                $jaPossui = $resultado->num_rows > 0;
-                $stmtVerifica->close();
+                $check = $conn->prepare("SELECT ID_Biblioteca FROM biblioteca WHERE ID_usuario = ? AND ID_jogo = ? LIMIT 1");
+                $check->bind_param("ii", $id_usuario, $id_jogo);
+                $check->execute();
+                $jaPossui = $check->get_result()->num_rows > 0;
+                $check->close();
 
                 if (!$jaPossui) {
-                    $sqlBiblioteca = "INSERT INTO biblioteca (ID_usuario, ID_jogo, Data_Aquisicao, Horas_Jogadas) VALUES (?, ?, CURDATE(), 0)";
-                    $stmtBiblioteca = $conn->prepare($sqlBiblioteca);
-
-                    if (!$stmtBiblioteca) {
-                        throw new Exception("Erro ao preparar biblioteca: " . $conn->error);
-                    }
-
-                    $stmtBiblioteca->bind_param("ii", $id_usuario, $id_jogo);
-
-                    if (!$stmtBiblioteca->execute()) {
-                        throw new Exception("Erro ao adicionar jogo à biblioteca: " . $stmtBiblioteca->error);
-                    }
-
+                    $ins = $conn->prepare("INSERT INTO biblioteca (ID_usuario, ID_jogo, Data_Aquisicao, Horas_Jogadas) VALUES (?, ?, CURDATE(), 0)");
+                    $ins->bind_param("ii", $id_usuario, $id_jogo);
+                    $ins->execute();
                     $quantidade_adicionados++;
-                    $stmtBiblioteca->close();
+                    $ins->close();
                 }
             }
 
             $conn->commit();
-
             if ($forma_pagamento === "PIX") {
                 $codigo_pix = "LEGENDS-GAMES-" . $id_pagamento . "-" . number_format($total, 2, '', '') . "-" . strtoupper(substr(md5(uniqid("pix", true)), 0, 8));
             }
 
-            $_SESSION['pagamento'] = [
-                'id' => $id_pagamento,
-                'forma' => $forma_pagamento,
-                'autenticacao' => $autenticacao,
-                'total' => $total,
-                'codigo_pix' => $codigo_pix,
-                'quantidade_jogos' => count($itens)
-            ];
-
-            // Limpa o carrinho apenas na Sessão
+            unset($_SESSION['cupom']);
             $_SESSION['carrinho'] = [];
-
             $sucesso = true;
 
         } catch (Exception $e) {
-            try {
-                $conn->rollback();
-            } catch (Exception $rollback) {
-            }
+            $conn->rollback();
             $erro = $e->getMessage();
         }
     }
 }
 ?>
-
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Finalizar compra - Legends Games</title>
 <style>
 * { box-sizing: border-box; }
@@ -317,14 +164,13 @@ body { margin: 0; font-family: Arial, sans-serif; background: radial-gradient(ci
 .voltar:hover { background: gold; color: black; }
 .container { width: 90%; max-width: 1100px; margin: 40px auto; }
 .titulo { text-align: center; color: gold; font-size: 32px; margin-bottom: 30px; }
-.conteudo { display: grid; grid-template-columns: 1fr 420px; gap: 25px; }
-.box { background: #14181f; padding: 25px; border-radius: 15px; border: 1px solid #333; box-shadow: 0 0 20px rgba(0,0,0,.3); }
-.box h2 { color: gold; margin-top: 0; }
-.produto { padding: 18px 0; border-bottom: 1px solid #333; }
+.conteudo { display: grid; grid-template-columns: 1fr 420px; gap: 25px; align-items: start;}
+.box { background: #14181f; padding: 25px; border-radius: 15px; border: 1px solid #333; box-shadow: 0 0 20px rgba(0,0,0,.3); margin-bottom: 20px;}
+.box h2 { color: gold; margin-top: 0; border-bottom: 1px solid #333; padding-bottom: 10px;}
+.produto { padding: 18px 0; border-bottom: 1px dashed #333; }
 .produto h3 { margin: 0 0 8px; color: white; }
-.produto p { margin: 6px 0; color: #aaa; }
 .preco { color: gold; font-weight: bold; font-size: 18px; }
-.total { display: flex; justify-content: space-between; align-items: center; margin-top: 25px; padding-top: 20px; border-top: 2px solid gold; font-size: 25px; font-weight: bold; }
+.total { display: flex; justify-content: space-between; align-items: center; margin-top: 25px; padding-top: 20px; font-size: 25px; font-weight: bold; }
 .total span:last-child { color: gold; }
 label { display: block; margin-top: 15px; margin-bottom: 7px; color: #ddd; }
 select, input { width: 100%; padding: 13px; border-radius: 8px; border: 1px solid #444; background: #252a32; color: white; font-size: 15px; outline: none; }
@@ -334,22 +180,12 @@ select:focus, input:focus { border-color: gold; }
 #pix { display: none; margin-top: 20px; padding: 20px; background: #0d0f13; border-radius: 12px; text-align: center; border: 1px solid #333; }
 #qrCode { width: 220px; height: 220px; background: white; padding: 8px; border-radius: 10px; display: block; margin: 20px auto; }
 .codigo-pix { background: #000; color: #00ff88; padding: 15px; border-radius: 8px; word-break: break-all; font-size: 13px; margin-top: 15px; }
-.copiar { margin-top: 12px; padding: 10px 15px; border: 1px solid gold; background: #222; color: gold; border-radius: 8px; cursor: pointer; }
-.copiar:hover { background: gold; color: black; }
 .botao { width: 100%; margin-top: 25px; padding: 16px; border: none; border-radius: 10px; background: linear-gradient(90deg, gold, #ffcc00); color: black; font-size: 18px; font-weight: bold; cursor: pointer; }
 .botao:hover { background: white; }
 .erro { background: #8b1e24; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center; font-weight: bold; }
-.confirmacao { max-width: 700px; margin: 60px auto; background: #14181f; border: 1px solid #00ff88; border-radius: 20px; padding: 40px; text-align: center; box-shadow: 0 0 30px rgba(0,255,136,.15); }
+.confirmacao { max-width: 700px; margin: 60px auto; background: #14181f; border: 1px solid #00ff88; border-radius: 20px; padding: 40px; text-align: center; }
 .confirmacao h1 { color: #00ff88; margin-top: 0; font-size: 32px; }
-.confirmacao p { color: #ccc; line-height: 1.6; }
-.id { color: gold; font-size: 23px; font-weight: bold; margin: 20px; }
-.valor { color: gold; font-size: 32px; font-weight: bold; margin: 20px; }
-.autenticacao { background: #000; color: #00ff88; padding: 15px; border-radius: 8px; word-break: break-all; margin: 20px 0; }
-.sucesso-biblioteca { background: #10251b; color: #00ff88; padding: 15px; border-radius: 10px; margin-top: 20px; font-weight: bold; }
-.botao-loja { display: inline-block; margin-top: 25px; padding: 14px 25px; background: gold; color: black; text-decoration: none; border-radius: 8px; font-weight: bold; }
-.botao-loja:hover { background: white; }
 @media(max-width: 800px) { .conteudo { grid-template-columns: 1fr; } }
-@media(max-width: 500px) { .linha { flex-direction: column; gap: 0; } .confirmacao { padding: 25px; } .logo { font-size: 23px; } .voltar { left: 10px; padding: 8px 10px; font-size: 12px; } }
 </style>
 </head>
 <body>
@@ -360,83 +196,93 @@ select:focus, input:focus { border-color: gold; }
 </header>
 
 <div class="container">
-
 <?php if ($sucesso): ?>
     <div class="confirmacao">
         <h1>✅ Compra finalizada!</h1>
         <p>Seu pagamento foi registrado com sucesso.</p>
-        <div class="id">Pagamento nº <?= (int)$id_pagamento ?></div>
-        <p>Forma de pagamento:</p>
-        <strong><?= htmlspecialchars($forma_pagamento) ?></strong>
-        <div class="valor">R$ <?= number_format($total, 2, ',', '.') ?></div>
-        <p>Código de autenticação:</p>
-        <div class="autenticacao"><?= htmlspecialchars($autenticacao) ?></div>
-        <div class="sucesso-biblioteca">🎮 <?= (int)$quantidade_adicionados ?> jogo(s) adicionado(s) à sua biblioteca!</div>
-
+        <p style="color: gold; font-size: 23px; font-weight: bold;">Pagamento nº <?= (int)$id_pagamento ?></p>
+        <p>Forma de pagamento: <strong><?= htmlspecialchars($forma_pagamento) ?></strong></p>
+        <p style="color: gold; font-size: 32px; font-weight: bold;">R$ <?= number_format($total, 2, ',', '.') ?></p>
+        
         <?php if ($forma_pagamento === "PIX"): ?>
             <h2 style="color:#00ff88; margin-top:30px;">📱 PIX</h2>
             <p>Escaneie o QR Code abaixo.</p>
             <img id="qrConfirmacao" alt="QR Code PIX" style="width:220px; height:220px; background:white; padding:8px; border-radius:10px; margin:20px auto; display:block;">
-            <div class="autenticacao"><?= htmlspecialchars($codigo_pix) ?></div>
-            <button type="button" class="copiar" onclick="copiarConfirmacao()">📋 Copiar código PIX</button>
+            <div class="codigo-pix"><?= htmlspecialchars($codigo_pix) ?></div>
+            <button type="button" class="botao" style="width:auto; padding:10px 20px; margin-top:15px;" onclick="copiarConfirmacao()">📋 Copiar PIX</button>
         <?php endif; ?>
 
-        <br>
-        <a href="biblioteca.php" class="botao-loja">🎮 Ir para minha biblioteca</a>
-        <br>
-        <a href="tela_inicial.php" class="botao-loja">🏠 Voltar para a loja</a>
+        <br><br>
+        <a href="biblioteca.php" class="botao" style="display:inline-block; width:auto; text-decoration:none;">🎮 Ir para biblioteca</a>
     </div>
 
 <?php else: ?>
-
     <h1 class="titulo">💳 Finalizar pagamento</h1>
-
-    <?php if ($erro !== ""): ?>
-        <div class="erro">⚠️ <?= htmlspecialchars($erro) ?></div>
-    <?php endif; ?>
+    <?php if ($erro !== ""): ?> <div class="erro">⚠️ <?= htmlspecialchars($erro) ?></div> <?php endif; ?>
 
     <div class="conteudo">
-        <div class="box">
-            <h2>🛒 Seu carrinho</h2>
-            <?php if (count($itens) > 0): ?>
-                <?php foreach ($itens as $item): ?>
-                    <div class="produto">
-                        <h3><?= htmlspecialchars($item['nome']) ?></h3>
-                        <p>Quantidade: <?= (int)$item['quantidade'] ?></p>
-                        <p>Preço unitário: R$ <?= number_format($item['preco'], 2, ',', '.') ?></p>
-                        <div class="preco">Subtotal: R$ <?= number_format($item['subtotal'], 2, ',', '.') ?></div>
-                    </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <div class="produto">
-                    <h3>🛒 Carrinho vazio</h3>
-                    <p>Não existem jogos no carrinho.</p>
-                    <a href="tela_inicial.php" style="display:inline-block; margin-top:15px; background:gold; color:black; padding:12px 18px; border-radius:8px; text-decoration:none; font-weight:bold;">🎮 Ver jogos</a>
-                </div>
-            <?php endif; ?>
+        <div>
+            <div class="box">
+                <h2>🛒 Seu carrinho</h2>
+                <?php if (count($itens) > 0): ?>
+                    <?php foreach ($itens as $item): ?>
+                        <div class="produto">
+                            <h3><?= htmlspecialchars($item['nome']) ?></h3>
+                            <p style="color:#aaa; margin:5px 0;">Preço unitário: R$ <?= number_format($item['preco'], 2, ',', '.') ?></p>
+                            <div class="preco">Subtotal: R$ <?= number_format($item['subtotal'], 2, ',', '.') ?></div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <p>Carrinho vazio.</p>
+                <?php endif; ?>
 
-            <div class="total">
-                <span>Total</span>
-                <span>
-                    <?php if ($eh_admin): ?>
-                        <span style="text-decoration: line-through; color: #888; font-size: 16px; margin-right: 10px;">R$ <?= number_format($total_original, 2, ',', '.') ?></span>
-                        <span style="color: #00ff88;">Grátis</span>
-                    <?php else: ?>
-                        R$ <?= number_format($total, 2, ',', '.') ?>
-                    <?php endif; ?>
-                </span>
+                <div class="total">
+                    <span>Total</span>
+                    <span>
+                        <?php if ($eh_admin): ?>
+                            <span style="text-decoration: line-through; color: #888; font-size: 16px; margin-right: 10px;">R$ <?= number_format($total_original, 2, ',', '.') ?></span>
+                            <span style="color: #00ff88;">Grátis</span>
+                        <?php elseif (isset($_SESSION['cupom'])): ?>
+                            <span style="text-decoration: line-through; color: #888; font-size: 16px; margin-right: 10px;">R$ <?= number_format($total_original, 2, ',', '.') ?></span>
+                            R$ <?= number_format($total, 2, ',', '.') ?>
+                        <?php else: ?>
+                            R$ <?= number_format($total, 2, ',', '.') ?>
+                        <?php endif; ?>
+                    </span>
+                </div>
             </div>
+
+            <!-- CAMPO DE CUPOM DE DESCONTO -->
+            <?php if (!$eh_admin && count($itens) > 0): ?>
+            <div class="box">
+                <h2>🏷️ Cupom de Desconto</h2>
+                <?= $mensagem_cupom ?>
+                <?php if(isset($_SESSION['cupom'])): ?>
+                    <div style="background: #111; padding: 15px; border-radius: 8px; border: 1px solid #00ff88; display: flex; justify-content: space-between; align-items: center;">
+                        <span style="color: #00ff88; font-weight: bold;">✅ <?= htmlspecialchars($_SESSION['cupom']['codigo']) ?> (<?= $_SESSION['cupom']['desconto'] ?>% OFF)</span>
+                        <form method="POST" style="margin:0;">
+                            <button type="submit" name="remover_cupom" style="background: #8b1e24; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; font-weight:bold;">Remover</button>
+                        </form>
+                    </div>
+                <?php else: ?>
+                    <form method="POST" style="display: flex; gap: 10px;">
+                        <input type="text" name="codigo_cupom" placeholder="Ex: NINJA20" required style="margin:0; flex:1;">
+                        <button type="submit" name="aplicar_cupom" style="background: gold; color: black; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; margin:0; width:auto;">Aplicar</button>
+                    </form>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
         </div>
 
         <div class="box">
             <h2>💳 Pagamento</h2>
             <?php if (count($itens) > 0): ?>
-                <form method="POST" action="tela_pagento.php" onsubmit="return validarFormulario()">
+                <form method="POST" action="tela_pagento.php">
+                    <input type="hidden" name="finalizar_compra" value="1">
                     <?php if ($eh_admin): ?>
-                        <input type="hidden" name="forma_pagamento" value="Resgate Admin">
                         <div style="text-align: center; padding: 20px 0;">
-                            <p style="color: #00ff88; font-size: 18px; font-weight: bold; margin-bottom: 20px;">✨ Privilégio de Administrador Ativado</p>
-                            <button type="submit" class="botao" style="background: #00ff88; color: black; border: 2px solid #00ff88; cursor: pointer;">🎁 Resgatar Gratuitamente</button>
+                            <p style="color: #00ff88; font-size: 18px; font-weight: bold;">✨ Privilégio de Administrador Ativado</p>
+                            <button type="submit" class="botao" style="background: #00ff88; color: black;">🎁 Resgatar Gratuitamente</button>
                         </div>
                     <?php else: ?>
                         <label>Forma de pagamento</label>
@@ -447,21 +293,19 @@ select:focus, input:focus { border-color: gold; }
 
                         <div id="cartao">
                             <label>Nome no cartão</label>
-                            <input type="text" name="nome_cartao" id="nome_cartao" placeholder="Nome do titular">
+                            <input type="text" name="nome_cartao" placeholder="Nome do titular">
                             <label>Número do cartão</label>
                             <input type="text" name="numero_cartao" id="numero_cartao" placeholder="0000 0000 0000 0000" maxlength="19">
                             <div class="linha">
                                 <div><label>Validade</label><input type="text" name="validade" id="validade" placeholder="MM/AA" maxlength="5"></div>
-                                <div><label>CVV</label><input type="password" name="cvv" id="cvv" placeholder="123" maxlength="4"></div>
+                                <div><label>CVV</label><input type="password" name="cvv" placeholder="123" maxlength="4"></div>
                             </div>
                         </div>
 
                         <div id="pix">
                             <h3>📱 Pagamento via PIX</h3>
-                            <p>O código PIX será gerado ao finalizar a compra.</p>
                             <img id="qrCode" alt="QR Code PIX">
                             <div class="codigo-pix" id="codigoPix"></div>
-                            <button type="button" class="copiar" onclick="copiarPix()">📋 Copiar código</button>
                         </div>
                         <button type="submit" class="botao">✅ Finalizar compra</button>
                     <?php endif; ?>
@@ -476,82 +320,30 @@ select:focus, input:focus { border-color: gold; }
 function mudarMetodo() {
     const metodo = document.getElementById("metodo");
     if (!metodo) return;
-    const cartao = document.getElementById("cartao");
-    const pix = document.getElementById("pix");
-    if (metodo.value === "PIX") {
-        cartao.style.display = "none";
-        pix.style.display = "block";
-        gerarPreviewPix();
-    } else {
-        cartao.style.display = "block";
-        pix.style.display = "none";
-    }
+    document.getElementById("cartao").style.display = (metodo.value === "PIX") ? "none" : "block";
+    document.getElementById("pix").style.display = (metodo.value === "PIX") ? "block" : "none";
+    if(metodo.value === "PIX") gerarPreviewPix();
 }
 
 function gerarPreviewPix() {
     const valor = <?= json_encode(number_format($total, 2, '.', '')) ?>;
     const codigo = "LEGENDS-GAMES-PIX-" + valor + "-" + Math.floor(Math.random() * 99999999);
-    const campo = document.getElementById("codigoPix");
-    if (campo) campo.innerText = codigo;
-    const qr = "https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=" + encodeURIComponent(codigo);
-    const imagem = document.getElementById("qrCode");
-    if (imagem) imagem.src = qr;
+    document.getElementById("codigoPix").innerText = codigo;
+    document.getElementById("qrCode").src = "https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=" + encodeURIComponent(codigo);
 }
 
-function copiarPix() {
-    const elemento = document.getElementById("codigoPix");
-    if (!elemento) return;
-    const codigo = elemento.innerText;
-    if (!codigo) { alert("Código PIX ainda não foi gerado."); return; }
-    navigator.clipboard.writeText(codigo).then(function() { alert("Código PIX copiado!"); }).catch(function() { alert("Não foi possível copiar o código."); });
-}
-
-function validarFormulario() {
-    const metodo = document.getElementById("metodo");
-    if (!metodo) return true;
-    if (metodo.value === "PIX") return true;
-    const nome = document.getElementById("nome_cartao").value.trim();
-    const numero = document.getElementById("numero_cartao").value.replace(/\D/g, "");
-    const validade = document.getElementById("validade").value.trim();
-    const cvv = document.getElementById("cvv").value.replace(/\D/g, "");
-    if (nome === "") { alert("Informe o nome do titular."); return false; }
-    if (numero.length < 13) { alert("Número do cartão inválido."); return false; }
-    if (validade.length < 5) { alert("Informe a validade do cartão."); return false; }
-    if (cvv.length < 3) { alert("Informe o CVV."); return false; }
-    return true;
-}
-
-const numeroCartao = document.getElementById("numero_cartao");
-if (numeroCartao) {
-    numeroCartao.addEventListener("input", function() {
-        let valor = this.value.replace(/\D/g, "");
-        valor = valor.substring(0, 16);
-        valor = valor.replace(/(\d{4})(?=\d)/g, "$1 ");
-        this.value = valor;
-    });
-}
-
-const validade = document.getElementById("validade");
-if (validade) {
-    validade.addEventListener("input", function() {
-        let valor = this.value.replace(/\D/g, "");
-        valor = valor.substring(0, 4);
-        if (valor.length >= 3) {
-            valor = valor.substring(0, 2) + "/" + valor.substring(2);
-        }
-        this.value = valor;
-    });
-}
+document.getElementById("numero_cartao")?.addEventListener("input", function() {
+    this.value = this.value.replace(/\D/g, "").substring(0, 16).replace(/(\d{4})(?=\d)/g, "$1 ");
+});
+document.getElementById("validade")?.addEventListener("input", function() {
+    let v = this.value.replace(/\D/g, "").substring(0, 4);
+    this.value = v.length >= 3 ? v.substring(0, 2) + "/" + v.substring(2) : v;
+});
 
 <?php if ($sucesso && $forma_pagamento === "PIX"): ?>
 const codigoConfirmacao = <?= json_encode($codigo_pix) ?>;
-const qrConfirmacao = "https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=" + encodeURIComponent(codigoConfirmacao);
-const imagemConfirmacao = document.getElementById("qrConfirmacao");
-if (imagemConfirmacao) imagemConfirmacao.src = qrConfirmacao;
-
-function copiarConfirmacao() {
-    navigator.clipboard.writeText(codigoConfirmacao).then(function() { alert("Código PIX copiado!"); }).catch(function() { alert("Não foi possível copiar."); });
-}
+document.getElementById("qrConfirmacao").src = "https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=" + encodeURIComponent(codigoConfirmacao);
+function copiarConfirmacao() { navigator.clipboard.writeText(codigoConfirmacao).then(() => alert("Copiado!")); }
 <?php endif; ?>
 </script>
 </body>

@@ -10,9 +10,11 @@ if (!isset($_SESSION['ID_Usuario'])) {
 $id_usuario = (int)$_SESSION['ID_Usuario'];
 $mensagem = "";
 
+// Auto-configuração do Banco de Dados
 $conexao->query("ALTER TABLE usuario ADD COLUMN IF NOT EXISTS Nome_Exibicao VARCHAR(100) DEFAULT NULL");
 $conexao->query("ALTER TABLE usuario ADD COLUMN IF NOT EXISTS Foto_Perfil VARCHAR(255) DEFAULT NULL");
 $conexao->query("ALTER TABLE usuario ADD COLUMN IF NOT EXISTS Data_Cadastro DATETIME DEFAULT CURRENT_TIMESTAMP");
+
 $diretorio_uploads = 'uploads/';
 if (!is_dir($diretorio_uploads)) mkdir($diretorio_uploads, 0777, true);
 
@@ -102,7 +104,14 @@ $patente_nome = "Novato";
 $patente_cor = "#aaa";
 $patente_icone = "🔰";
 
-if ($total_jogos >= 10) {
+// 👑 REGRA VIP: Se for Admin, ganha a Patente Suprema
+if (isset($usuario['Nivel_Acesso']) && $usuario['Nivel_Acesso'] == 1) {
+    $patente_nome = "Patente Suprema";
+    $patente_cor = "#ff2a2a"; // Vermelho neon imponente
+    $patente_icone = "⚡";
+} 
+// Restante das regras para usuários normais
+elseif ($total_jogos >= 10) {
     $patente_nome = "Lenda Dourada";
     $patente_cor = "gold";
     $patente_icone = "👑";

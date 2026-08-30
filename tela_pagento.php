@@ -27,7 +27,6 @@ if (!isset($_SESSION['carrinho'])) {
     $_SESSION['carrinho'] = [];
 }
 
-
 /* =========================================================
    VARIÁVEIS
 ========================================================= */
@@ -35,6 +34,7 @@ if (!isset($_SESSION['carrinho'])) {
 $itens = [];
 
 $total = 0;
+$total_original = 0;
 
 $erro = "";
 
@@ -50,6 +50,20 @@ $id_pagamento = 0;
 
 $quantidade_adicionados = 0;
 
+/* =========================================================
+   VERIFICAR SE É ADMINISTRADOR
+========================================================= */
+$eh_admin = false;
+$stmtAdmin = $conn->prepare("SELECT Nivel_Acesso FROM usuario WHERE ID_usuario = ? LIMIT 1");
+if ($stmtAdmin) {
+    $stmtAdmin->bind_param("i", $id_usuario);
+    $stmtAdmin->execute();
+    $resAdmin = $stmtAdmin->get_result()->fetch_assoc();
+    if ($resAdmin && isset($resAdmin['Nivel_Acesso']) && $resAdmin['Nivel_Acesso'] == 1) {
+        $eh_admin = true;
+    }
+    $stmtAdmin->close();
+}
 
 /* =========================================================
    LER CARRINHO DA SESSÃO
@@ -292,6 +306,10 @@ foreach ($_SESSION['carrinho'] as $indice => $item) {
     ];
 }
 
+$total_original = $total;
+if ($eh_admin) {
+    $total = 0;
+}
 
 /* =========================================================
    PROCESSAR PAGAMENTO
@@ -299,11 +317,11 @@ foreach ($_SESSION['carrinho'] as $indice => $item) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
-    $forma_pagamento =
-        trim(
-            $_POST['forma_pagamento'] ?? ''
-        );
-
+    if ($eh_admin) {
+        $forma_pagamento = "Resgate Admin";
+    } else {
+        $forma_pagamento = trim($_POST['forma_pagamento'] ?? '');
+    }
 
     /* =====================================================
        VERIFICAR CARRINHO
@@ -342,7 +360,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
        VALIDAR PAGAMENTO
     ===================================================== */
 
-    if ($erro === "") {
+    if ($erro === "" && !$eh_admin) {
 
         if (
             $forma_pagamento !== "Cartão" &&
@@ -361,6 +379,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (
         $erro === "" &&
+        !$eh_admin &&
         $forma_pagamento === "Cartão"
     ) {
 
@@ -957,6 +976,8 @@ body {
     display: flex;
 
     justify-content: space-between;
+
+    align-items: center;
 
     margin-top: 25px;
 
@@ -1649,16 +1670,12 @@ input:focus {
                 </span>
 
                 <span>
-
-                    R$
-
-                    <?= number_format(
-                        $total,
-                        2,
-                        ',',
-                        '.'
-                    ) ?>
-
+                    <?php if ($eh_admin): ?>
+                        <span style="text-decoration: line-through; color: #888; font-size: 16px; margin-right: 10px;">R$ <?= number_format($total_original, 2, ',', '.') ?></span>
+                        <span style="color: #00ff88;">Grátis</span>
+                    <?php else: ?>
+                        R$ <?= number_format($total, 2, ',', '.') ?>
+                    <?php endif; ?>
                 </span>
 
             </div>
@@ -1686,152 +1703,172 @@ input:focus {
                     onsubmit="return validarFormulario()"
                 >
 
+                    <?php if ($eh_admin): ?>
 
-                    <label>
-                        Forma de pagamento
-                    </label>
+                        <input type="hidden" name="forma_pagamento" value="Resgate Admin">
+                        
+                        <div style="text-align: center; padding: 20px 0;">
+                            <p style="color: #00ff88; font-size: 18px; font-weight: bold; margin-bottom: 20px;">
+                                ✨ Privilégio de Administrador Ativado
+                            </p>
+                            
+                            <button
+                                type="submit"
+                                class="botao"
+                                style="background: #00ff88; color: black; border: 2px solid #00ff88; cursor: pointer;"
+                            >
+                                🎁 Resgatar Gratuitamente
+                            </button>
+                        </div>
 
-
-                    <select
-                        name="forma_pagamento"
-                        id="metodo"
-                        onchange="mudarMetodo()"
-                        required
-                    >
-
-                        <option value="Cartão">
-                            💳 Cartão
-                        </option>
-
-                        <option value="PIX">
-                            📱 PIX
-                        </option>
-
-                    </select>
-
-
-                    <!-- CARTÃO -->
-
-                    <div id="cartao">
-
+                    <?php else: ?>
 
                         <label>
-                            Nome no cartão
+                            Forma de pagamento
                         </label>
 
 
-                        <input
-                            type="text"
-                            name="nome_cartao"
-                            id="nome_cartao"
-                            placeholder="Nome do titular"
+                        <select
+                            name="forma_pagamento"
+                            id="metodo"
+                            onchange="mudarMetodo()"
+                            required
                         >
 
+                            <option value="Cartão">
+                                💳 Cartão
+                            </option>
 
-                        <label>
-                            Número do cartão
-                        </label>
+                            <option value="PIX">
+                                📱 PIX
+                            </option>
 
-
-                        <input
-                            type="text"
-                            name="numero_cartao"
-                            id="numero_cartao"
-                            placeholder="0000 0000 0000 0000"
-                            maxlength="19"
-                        >
+                        </select>
 
 
-                        <div class="linha">
+                        <!-- CARTÃO -->
+
+                        <div id="cartao">
 
 
-                            <div>
-
-                                <label>
-                                    Validade
-                                </label>
+                            <label>
+                                Nome no cartão
+                            </label>
 
 
-                                <input
-                                    type="text"
-                                    name="validade"
-                                    id="validade"
-                                    placeholder="MM/AA"
-                                    maxlength="5"
-                                >
+                            <input
+                                type="text"
+                                name="nome_cartao"
+                                id="nome_cartao"
+                                placeholder="Nome do titular"
+                            >
+
+
+                            <label>
+                                Número do cartão
+                            </label>
+
+
+                            <input
+                                type="text"
+                                name="numero_cartao"
+                                id="numero_cartao"
+                                placeholder="0000 0000 0000 0000"
+                                maxlength="19"
+                            >
+
+
+                            <div class="linha">
+
+
+                                <div>
+
+                                    <label>
+                                        Validade
+                                    </label>
+
+
+                                    <input
+                                        type="text"
+                                        name="validade"
+                                        id="validade"
+                                        placeholder="MM/AA"
+                                        maxlength="5"
+                                    >
+
+                                </div>
+
+
+                                <div>
+
+                                    <label>
+                                        CVV
+                                    </label>
+
+
+                                    <input
+                                        type="password"
+                                        name="cvv"
+                                        id="cvv"
+                                        placeholder="123"
+                                        maxlength="4"
+                                    >
+
+                                </div>
 
                             </div>
 
-
-                            <div>
-
-                                <label>
-                                    CVV
-                                </label>
-
-
-                                <input
-                                    type="password"
-                                    name="cvv"
-                                    id="cvv"
-                                    placeholder="123"
-                                    maxlength="4"
-                                >
-
-                            </div>
 
                         </div>
 
 
-                    </div>
+                        <!-- PIX -->
+
+                        <div id="pix">
+
+                            <h3>
+                                📱 Pagamento via PIX
+                            </h3>
 
 
-                    <!-- PIX -->
-
-                    <div id="pix">
-
-                        <h3>
-                            📱 Pagamento via PIX
-                        </h3>
+                            <p>
+                                O código PIX será gerado
+                                ao finalizar a compra.
+                            </p>
 
 
-                        <p>
-                            O código PIX será gerado
-                            ao finalizar a compra.
-                        </p>
+                            <img
+                                id="qrCode"
+                                alt="QR Code PIX"
+                            >
 
 
-                        <img
-                            id="qrCode"
-                            alt="QR Code PIX"
-                        >
+                            <div
+                                class="codigo-pix"
+                                id="codigoPix"
+                            >
+                            </div>
 
 
-                        <div
-                            class="codigo-pix"
-                            id="codigoPix"
-                        >
+                            <button
+                                type="button"
+                                class="copiar"
+                                onclick="copiarPix()"
+                            >
+                                📋 Copiar código
+                            </button>
+
                         </div>
 
 
                         <button
-                            type="button"
-                            class="copiar"
-                            onclick="copiarPix()"
+                            type="submit"
+                            class="botao"
                         >
-                            📋 Copiar código
+                            ✅ Finalizar compra
                         </button>
 
-                    </div>
-
-
-                    <button
-                        type="submit"
-                        class="botao"
-                    >
-                        ✅ Finalizar compra
-                    </button>
-
+                    <?php endif; ?>
 
                 </form>
 
@@ -2009,9 +2046,9 @@ function validarFormulario() {
             "metodo"
         );
 
-
+    // Ajustado para permitir que o formulário do Admin (que não possui o select #metodo) seja enviado sem travar.
     if (!metodo) {
-        return false;
+        return true;
     }
 
 

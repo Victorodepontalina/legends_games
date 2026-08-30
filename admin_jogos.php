@@ -19,23 +19,21 @@ if (!$resAdmin || $resAdmin['Nivel_Acesso'] != 1) {
 }
 $stmtAdmin->close();
 
-// Criar tabela de cupons automaticamente
+// Criar tabela de cupons e atualizar tabela de jogos com a coluna Badge
 $conexao->query("CREATE TABLE IF NOT EXISTS cupom (
     ID_Cupom INT AUTO_INCREMENT PRIMARY KEY,
     Codigo VARCHAR(50) UNIQUE NOT NULL,
     Desconto INT NOT NULL,
     Ativo INT DEFAULT 1
 )");
+$conexao->query("ALTER TABLE jogo ADD COLUMN IF NOT EXISTS Badge VARCHAR(50) DEFAULT ''");
 
 $mensagem = "";
 
-/* =========================================================
-   AÇÕES DO CRUD (JOGOS E CUPONS)
-========================================================= */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $acao = $_POST['acao'] ?? '';
 
-    // JOGOS
+    // ADICIONAR JOGO
     if ($acao === 'adicionar') {
         $nome = trim($_POST['nome']);
         $descricao = trim($_POST['descricao']);
@@ -43,16 +41,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $capa = trim($_POST['capa']);
         $video = trim($_POST['video']);
         $categoria = (int)$_POST['categoria'];
+        $badge = trim($_POST['badge']);
 
-        $sql = "INSERT INTO jogo (Nome, Descricao, Preco_Unitario, Capa, Video_Demonstrativo, ID_Categoria) VALUES (?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO jogo (Nome, Descricao, Preco_Unitario, Capa, Video_Demonstrativo, ID_Categoria, Badge) VALUES (?, ?, ?, ?, ?, ?, ?)";
         $stmt = $conexao->prepare($sql);
         if ($stmt) {
-            $stmt->bind_param("ssdssi", $nome, $descricao, $preco, $capa, $video, $categoria);
+            $stmt->bind_param("ssdssis", $nome, $descricao, $preco, $capa, $video, $categoria, $badge);
             if ($stmt->execute()) $mensagem = "<div class='sucesso'>Jogo adicionado!</div>";
             else $mensagem = "<div class='erro'>Erro: " . $stmt->error . "</div>";
             $stmt->close();
         }
-    } elseif ($acao === 'excluir') {
+    } 
+    // EXCLUIR JOGO
+    elseif ($acao === 'excluir') {
         $id = (int)$_POST['id_jogo'];
         $stmt = $conexao->prepare("DELETE FROM jogo WHERE ID_jogo = ?");
         if ($stmt) {
@@ -61,13 +62,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->close();
             $mensagem = "<div class='sucesso'>Jogo excluído!</div>";
         }
-    } elseif ($acao === 'editar') {
+    } 
+    // EDITAR JOGO (NOME, PREÇO E EMBLEMA)
+    elseif ($acao === 'editar') {
         $id = (int)$_POST['id_jogo'];
         $nome = trim($_POST['nome']);
         $preco = (float)$_POST['preco'];
-        $stmt = $conexao->prepare("UPDATE jogo SET Nome = ?, Preco_Unitario = ? WHERE ID_jogo = ?");
+        $badge = trim($_POST['badge']);
+        
+        $stmt = $conexao->prepare("UPDATE jogo SET Nome = ?, Preco_Unitario = ?, Badge = ? WHERE ID_jogo = ?");
         if ($stmt) {
-            $stmt->bind_param("sdi", $nome, $preco, $id);
+            $stmt->bind_param("sdsi", $nome, $preco, $badge, $id);
             $stmt->execute();
             $stmt->close();
             $mensagem = "<div class='sucesso'>Jogo atualizado!</div>";
@@ -97,7 +102,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// BUSCAR DADOS
 $jogos = [];
 $resJogos = $conexao->query("SELECT j.*, c.Nome_Categoria FROM jogo j LEFT JOIN categoria c ON j.ID_Categoria = c.ID_Categoria ORDER BY j.ID_jogo DESC");
 if ($resJogos) while($row = $resJogos->fetch_assoc()) $jogos[] = $row;
@@ -159,21 +163,35 @@ button:hover { background: white; }
                 <input type="hidden" name="acao" value="adicionar">
                 <label>Nome do Jogo</label>
                 <input type="text" name="nome" required>
+                
                 <label>Preço (R$)</label>
                 <input type="number" name="preco" step="0.01" required>
+                
                 <label>Categoria</label>
                 <select name="categoria" required>
-                    <option value="">Selecione uma categoria...</option>
+                    <option value="">Selecione...</option>
                     <?php foreach($categorias as $cat): ?>
                         <option value="<?= $cat['ID_Categoria'] ?>"><?= htmlspecialchars($cat['Nome_Categoria']) ?></option>
                     <?php endforeach; ?>
                 </select>
+
+                <label>Emblema / Etiqueta</label>
+                <select name="badge">
+                    <option value="">Nenhum</option>
+                    <option value="novo">✨ Novo</option>
+                    <option value="oferta">💥 Oferta</option>
+                    <option value="hot">🔥 Mais Vendido</option>
+                </select>
+                
                 <label>Caminho da Capa</label>
                 <input type="text" name="capa" placeholder="imagens/nome.jpg" required>
+                
                 <label>Link do Trailer</label>
                 <input type="text" name="video" placeholder="YouTube Embed link" required>
+                
                 <label>Descrição</label>
                 <textarea name="descricao" rows="4" required></textarea>
+                
                 <button type="submit">Cadastrar Jogo</button>
             </form>
         </div>
@@ -214,24 +232,31 @@ button:hover { background: white; }
         <h2>🎮 Jogos Cadastrados</h2>
         <table class="tabela-dados">
             <thead>
-                <tr><th>Capa</th><th>Nome</th><th>Preço</th><th>Categoria</th><th>Ações</th></tr>
+                <tr><th>Capa</th><th>Dados</th><th>Emblema</th><th>Ações</th></tr>
             </thead>
             <tbody>
                 <?php foreach($jogos as $j): ?>
                     <tr>
                         <td><img src="<?= htmlspecialchars($j['Capa']) ?>" onerror="this.src='https://via.placeholder.com/50'"></td>
                         <td>
-                            <form method="POST" style="display:flex; gap:5px; align-items:center;">
+                            <form method="POST" style="display:flex; flex-direction:column; gap:5px;">
                                 <input type="hidden" name="acao" value="editar">
                                 <input type="hidden" name="id_jogo" value="<?= $j['ID_jogo'] ?>">
-                                <input type="text" name="nome" value="<?= htmlspecialchars($j['Nome']) ?>" style="margin:0; padding:6px; width: 150px;">
+                                <input type="text" name="nome" value="<?= htmlspecialchars($j['Nome']) ?>" style="margin:0; padding:6px;">
+                                <div style="display:flex; align-items:center; gap:5px;">
+                                    R$ <input type="number" name="preco" step="0.01" value="<?= $j['Preco_Unitario'] ?>" style="margin:0; padding:6px; width: 90px;">
+                                </div>
                         </td>
                         <td>
-                                R$ <input type="number" name="preco" step="0.01" value="<?= $j['Preco_Unitario'] ?>" style="margin:0; padding:6px; width: 80px;">
+                                <select name="badge" style="margin:0; padding:6px; width: 130px;">
+                                    <option value="" <?= ($j['Badge'] ?? '') == '' ? 'selected' : '' ?>>Nenhum</option>
+                                    <option value="novo" <?= ($j['Badge'] ?? '') == 'novo' ? 'selected' : '' ?>>✨ Novo</option>
+                                    <option value="oferta" <?= ($j['Badge'] ?? '') == 'oferta' ? 'selected' : '' ?>>💥 Oferta</option>
+                                    <option value="hot" <?= ($j['Badge'] ?? '') == 'hot' ? 'selected' : '' ?>>🔥 Top Vendas</option>
+                                </select>
                         </td>
-                        <td><?= htmlspecialchars($j['Nome_Categoria'] ?? 'Sem Categoria') ?></td>
-                        <td>
-                                <button type="submit" class="btn-pequeno">Salvar</button>
+                        <td style="vertical-align: top;">
+                                <button type="submit" class="btn-pequeno" style="margin-bottom:5px;">Salvar</button>
                             </form>
                             <form method="POST" style="display:inline;" onsubmit="return confirm('Excluir <?= htmlspecialchars($j['Nome']) ?>?');">
                                 <input type="hidden" name="acao" value="excluir">

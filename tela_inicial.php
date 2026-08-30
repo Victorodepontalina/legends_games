@@ -59,7 +59,6 @@ if (isset($_POST['favoritar'])) {
         $ins->bind_param("ii", $id_user, $id_jogo_fav);
         $ins->execute();
     }
-    // Redireciona mantendo a URL limpa
     header("Location: tela_inicial.php");
     exit;
 }
@@ -71,7 +70,6 @@ $meus_favoritos = [];
 
 if (isset($_SESSION['ID_Usuario'])) {
     $id_u = (int)$_SESSION['ID_Usuario'];
-    // Dados Usuário
     $stmtUser = $conexao->prepare("SELECT Nome, Nome_Exibicao, Foto_Perfil FROM usuario WHERE ID_usuario = ?");
     $stmtUser->bind_param("i", $id_u);
     $stmtUser->execute();
@@ -82,23 +80,24 @@ if (isset($_SESSION['ID_Usuario'])) {
     }
     $stmtUser->close();
     
-    // Lista de IDs favoritados
     $resFav = $conexao->query("SELECT ID_jogo FROM favoritos WHERE ID_usuario = $id_u");
     while ($f = $resFav->fetch_assoc()) {
         $meus_favoritos[] = $f['ID_jogo'];
     }
 }
 
-// BUSCAR CATEGORIAS E JOGOS...
+// BUSCAR CATEGORIAS
 $categorias = [];
 $resCat = $conexao->query("SELECT * FROM categoria ORDER BY Nome_Categoria ASC");
 if ($resCat && $resCat->num_rows > 0) {
     while ($row = $resCat->fetch_assoc()) $categorias[] = $row;
 }
 
+// FILTROS DA URL
 $busca = $_GET['busca'] ?? '';
 $filtro_categoria = $_GET['categoria'] ?? '';
 
+// BUSCAR JOGOS PARA A VITRINE
 $sqlJogos = "SELECT ID_jogo, Nome, Preco_Unitario, Capa FROM jogo WHERE 1=1";
 $params = [];
 $tipos = "";
@@ -125,6 +124,13 @@ if ($resultado && $resultado->num_rows > 0) {
     while ($row = $resultado->fetch_assoc()) $jogos_banco[] = $row;
 }
 $stmt->close();
+
+// BUSCAR JOGOS DE DESTAQUE (Últimos 3 cadastrados) PARA O BANNER
+$jogos_destaque = [];
+$resDestaque = $conexao->query("SELECT ID_jogo, Nome, Preco_Unitario, Capa FROM jogo ORDER BY ID_jogo DESC LIMIT 3");
+if ($resDestaque && $resDestaque->num_rows > 0) {
+    while ($row = $resDestaque->fetch_assoc()) $jogos_destaque[] = $row;
+}
 
 $qtdCarrinho = 0;
 if (isset($_SESSION['carrinho'])) {
@@ -158,7 +164,7 @@ body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,
 .menu a { color: inherit; text-decoration: none; font-weight: bold; }
 .menu a:hover { color: white; }
 .conteudo { flex: 1; padding: 20px; }
-.titulo { text-align: center; border: 2px solid gold; padding: 10px; border-radius: 10px; }
+.titulo { text-align: center; border: 2px solid gold; padding: 10px; border-radius: 10px; margin-bottom: 30px;}
 .games { display: flex; gap: 25px; flex-wrap: wrap; justify-content: center; }
 .card { width: 240px; background: #222; border-radius: 15px; overflow: hidden; transition: .3s; position: relative;}
 .card:hover { transform: scale(1.04); box-shadow: 0 0 15px rgba(255, 215, 0, 0.4); }
@@ -171,8 +177,6 @@ body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,
 .add { width: 100%; padding: 10px; background: gold; color: black; border: 0; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 8px; transition: 0.3s; }
 .add:hover { background: white; }
 .carrinho { color: gold; text-decoration: none; font-weight: bold; margin-right: 15px; }
-
-/* ESTILOS DA BARRA DE BUSCA E FAVORITOS */
 .barra-busca { display: flex; justify-content: center; gap: 10px; margin-bottom: 30px; background: #111; padding: 15px; border-radius: 10px; }
 .barra-busca input[type="text"], .barra-busca select { padding: 12px; border-radius: 8px; border: 1px solid #444; background: #222; color: white; font-size: 16px; }
 .barra-busca input[type="text"] { flex: 1; max-width: 400px; }
@@ -182,6 +186,21 @@ body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,
 .limpar-busca:hover { color: gold; }
 .btn-fav { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.6); border: none; font-size: 24px; cursor: pointer; border-radius: 50%; width: 40px; height: 40px; display: flex; justify-content: center; align-items: center; transition: 0.2s;}
 .btn-fav:hover { background: rgba(0,0,0,0.9); transform: scale(1.1); }
+
+/* ESTILOS DO BANNER DE DESTAQUE */
+.hero-banner { position: relative; width: 100%; max-width: 1000px; height: 350px; margin: 0 auto 40px; border-radius: 15px; overflow: hidden; box-shadow: 0 5px 20px rgba(0,0,0,0.5); border: 2px solid #333; }
+.hero-slide { display: none; width: 100%; height: 100%; position: relative; }
+.hero-slide.ativo { display: block; animation: fade 1s; }
+@keyframes fade { from {opacity: 0.5} to {opacity: 1} }
+.hero-slide img { width: 100%; height: 100%; object-fit: cover; }
+.hero-overlay { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.95)); padding: 40px 30px 20px; display: flex; justify-content: space-between; align-items: flex-end; }
+.hero-info h2 { color: white; font-size: 32px; margin: 0 0 5px; text-shadow: 2px 2px 4px #000; }
+.hero-info p { color: gold; font-size: 22px; font-weight: bold; margin: 0; }
+.hero-btn { background: gold; color: black; padding: 12px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; transition: 0.3s; }
+.hero-btn:hover { background: white; }
+.hero-nav { position: absolute; top: 50%; width: 100%; display: flex; justify-content: space-between; transform: translateY(-50%); padding: 0 15px; pointer-events: none; }
+.hero-seta { background: rgba(0,0,0,0.7); color: gold; border: 2px solid gold; width: 45px; height: 45px; border-radius: 50%; font-size: 20px; cursor: pointer; pointer-events: auto; transition: 0.3s; display: flex; align-items: center; justify-content: center;}
+.hero-seta:hover { background: gold; color: black; transform: scale(1.1); }
 </style>
 </head>
 <body>
@@ -230,7 +249,6 @@ body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,
 </aside>
 
 <main class="conteudo">
-    <h1 class="titulo">NOSSOS JOGOS</h1>
 
     <form class="barra-busca" method="GET" action="tela_inicial.php">
         <input type="text" name="busca" placeholder="Buscar jogo..." value="<?= htmlspecialchars($busca) ?>">
@@ -248,16 +266,42 @@ body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,
         <?php endif; ?>
     </form>
 
+    <!-- BANNER HERO DE DESTAQUES (Só aparece se o usuário não estiver usando a busca) -->
+    <?php if (($busca === '' && $filtro_categoria === '') && count($jogos_destaque) > 0): ?>
+    <div class="hero-banner">
+        <?php foreach($jogos_destaque as $i => $jd): ?>
+            <div class="hero-slide <?= $i === 0 ? 'ativo' : '' ?>">
+                <img src="<?= htmlspecialchars($jd['Capa']) ?>" onerror="this.src='https://via.placeholder.com/1000x350/111111/FFD700?text=Capa'">
+                <div class="hero-overlay">
+                    <div class="hero-info">
+                        <h2><?= htmlspecialchars($jd['Nome']) ?></h2>
+                        <p>R$ <?= number_format($jd['Preco_Unitario'], 2, ',', '.') ?></p>
+                    </div>
+                    <a href="tela_de_jogo.php?nome=<?= urlencode($jd['Nome']) ?>" class="hero-btn">🎮 Comprar Agora</a>
+                </div>
+            </div>
+        <?php endforeach; ?>
+        
+        <?php if(count($jogos_destaque) > 1): ?>
+        <div class="hero-nav">
+            <button class="hero-seta" onclick="mudarSlide(-1)">❮</button>
+            <button class="hero-seta" onclick="mudarSlide(1)">❯</button>
+        </div>
+        <?php endif; ?>
+    </div>
+    <?php endif; ?>
+
+    <h1 class="titulo">NOSSOS JOGOS</h1>
+
     <div class="games">
         <?php if (count($jogos_banco) > 0) {
             foreach ($jogos_banco as $g) { 
                 $eh_favorito = in_array($g['ID_jogo'], $meus_favoritos);
             ?>
             <div class="card">
-                <!-- Botão de Favoritar no Canto da Imagem -->
                 <form method="POST" style="margin:0;">
                     <input type="hidden" name="id_jogo" value="<?= $g['ID_jogo'] ?>">
-                    <button type="submit" name="favoritar" class="btn-fav" title="<?= $eh_favorito ? 'Remover dos Favoritos' : 'Adicionar aos Favoritos' ?>">
+                    <button type="submit" name="favoritar" class="btn-fav" title="Favoritos">
                         <?= $eh_favorito ? '❤️' : '🤍' ?>
                     </button>
                 </form>
@@ -279,6 +323,36 @@ body { margin: 0; font-family: Arial; background: radial-gradient(circle at top,
     </div>
 </main>
 </div>
+
+<script>
+// SCRIPT PARA RODAR O CARROSSEL HERO AUTOMATICAMENTE
+let slideAtual = 0;
+const slides = document.querySelectorAll('.hero-slide');
+let timerCarrossel;
+
+function mostrarSlide(index) {
+    if(slides.length <= 1) return;
+    slides.forEach(s => s.classList.remove('ativo'));
+    if (index >= slides.length) slideAtual = 0;
+    else if (index < 0) slideAtual = slides.length - 1;
+    else slideAtual = index;
+    slides[slideAtual].classList.add('ativo');
+}
+
+function mudarSlide(direcao) {
+    mostrarSlide(slideAtual + direcao);
+    resetarTimer();
+}
+
+function resetarTimer() {
+    clearInterval(timerCarrossel);
+    timerCarrossel = setInterval(() => mudarSlide(1), 5000);
+}
+
+if(slides.length > 1) {
+    resetarTimer();
+}
+</script>
 
 </body>
 </html>

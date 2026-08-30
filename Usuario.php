@@ -10,43 +10,31 @@ if (!isset($_SESSION['ID_Usuario'])) {
 $id_usuario = (int)$_SESSION['ID_Usuario'];
 $mensagem = "";
 
-// 1. Prepara o terreno automaticamente (Cria coluna e pasta se não existirem)
 $conexao->query("ALTER TABLE usuario ADD COLUMN IF NOT EXISTS Nome_Exibicao VARCHAR(100) DEFAULT NULL");
 $conexao->query("ALTER TABLE usuario ADD COLUMN IF NOT EXISTS Foto_Perfil VARCHAR(255) DEFAULT NULL");
 
 $diretorio_uploads = 'uploads/';
-if (!is_dir($diretorio_uploads)) {
-    mkdir($diretorio_uploads, 0777, true);
-}
+if (!is_dir($diretorio_uploads)) mkdir($diretorio_uploads, 0777, true);
 
-/* =========================================================
-   2. ATUALIZAR PERFIL E AVATAR
-========================================================= */
+// ATUALIZAR PERFIL E AVATAR
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['atualizar_perfil'])) {
     $nome = trim($_POST['nome']);
     $nome_exibicao = trim($_POST['nome_exibicao']);
     $email = trim($_POST['email']);
     $caminho_foto = null;
 
-    // Lógica de Upload da Foto
     if (isset($_FILES['avatar']) && $_FILES['avatar']['error'] === UPLOAD_ERR_OK) {
         $extensao = strtolower(pathinfo($_FILES['avatar']['name'], PATHINFO_EXTENSION));
         $extensoes_permitidas = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-
         if (in_array($extensao, $extensoes_permitidas)) {
-            // Cria um nome único para não substituir fotos de outros usuários
             $novo_nome = "avatar_" . $id_usuario . "_" . time() . "." . $extensao;
             $destino = $diretorio_uploads . $novo_nome;
-            
-            if (move_uploaded_file($_FILES['avatar']['tmp_name'], $destino)) {
-                $caminho_foto = $destino;
-            }
+            if (move_uploaded_file($_FILES['avatar']['tmp_name'], $destino)) $caminho_foto = $destino;
         } else {
-            $mensagem = "<div class='erro'>Formato de imagem inválido. Use JPG, PNG ou GIF.</div>";
+            $mensagem = "<div class='erro'>Formato inválido. Use JPG, PNG ou GIF.</div>";
         }
     }
 
-    // Atualiza o banco (com ou sem foto nova)
     if ($caminho_foto) {
         $stmt = $conexao->prepare("UPDATE usuario SET Nome = ?, Nome_Exibicao = ?, Email = ?, Foto_Perfil = ? WHERE ID_usuario = ?");
         $stmt->bind_param("ssssi", $nome, $nome_exibicao, $email, $caminho_foto, $id_usuario);
@@ -55,17 +43,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['atualizar_perfil'])) 
         $stmt->bind_param("sssi", $nome, $nome_exibicao, $email, $id_usuario);
     }
 
-    if (isset($stmt) && $stmt->execute()) {
-        $mensagem = "<div class='sucesso'>Perfil atualizado com sucesso!</div>";
-    } elseif (!isset($mensagem) || $mensagem === '') {
-        $mensagem = "<div class='erro'>Erro ao atualizar. Tente novamente.</div>";
-    }
+    if (isset($stmt) && $stmt->execute()) $mensagem = "<div class='sucesso'>Perfil atualizado com sucesso!</div>";
+    elseif (!isset($mensagem) || $mensagem === '') $mensagem = "<div class='erro'>Erro ao atualizar. Tente novamente.</div>";
     if (isset($stmt)) $stmt->close();
 }
 
-/* =========================================================
-   3. ALTERAR SENHA
-========================================================= */
+// ALTERAR SENHA
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['atualizar_senha'])) {
     $senha_atual = $_POST['senha_atual'];
     $nova_senha = $_POST['nova_senha'];
@@ -84,9 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['atualizar_senha'])) {
             $senha_hash = password_hash($nova_senha, PASSWORD_DEFAULT);
             $stmtUp = $conexao->prepare("UPDATE usuario SET Senha = ? WHERE ID_usuario = ?");
             $stmtUp->bind_param("si", $senha_hash, $id_usuario);
-            if ($stmtUp->execute()) {
-                $mensagem = "<div class='sucesso'>Senha alterada com segurança!</div>";
-            }
+            if ($stmtUp->execute()) $mensagem = "<div class='sucesso'>Senha alterada com segurança!</div>";
             $stmtUp->close();
         } else {
             $mensagem = "<div class='erro'>A senha atual está incorreta!</div>";
@@ -94,16 +75,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['atualizar_senha'])) {
     }
 }
 
-/* =========================================================
-   BUSCAR DADOS ATUAIS
-========================================================= */
-$stmtDados = $conexao->prepare("SELECT Nome, Nome_Exibicao, Email, Nivel_Acesso, Foto_Perfil FROM usuario WHERE ID_usuario = ?");
+// BUSCAR DADOS DO USUÁRIO
+$stmtDados = $conexao->prepare("SELECT Nome, Nome_Exibicao, Email, Nivel_Acesso, Foto_Perfil, Data_Cadastro FROM usuario WHERE ID_usuario = ?");
 $stmtDados->bind_param("i", $id_usuario);
 $stmtDados->execute();
 $usuario = $stmtDados->get_result()->fetch_assoc();
 $stmtDados->close();
 
 $foto_atual = !empty($usuario['Foto_Perfil']) ? $usuario['Foto_Perfil'] : 'https://via.placeholder.com/150/222222/FFD700?text=Foto';
+
+// ESTATÍSTICAS DE GAMIFICAÇÃO (Biblioteca)
+$total_jogos = 0;
+$horas_jogadas = 0;
+$stmtBib = $conexao->prepare("SELECT COUNT(ID_jogo) as TotalJogos, SUM(Horas_Jogadas) as TotalHoras FROM biblioteca WHERE ID_usuario = ?");
+if ($stmtBib) {
+    $stmtBib->bind_param("i", $id_usuario);
+    $stmtBib->execute();
+    $resBib = $stmtBib->get_result()->fetch_assoc();
+    $total_jogos = (int)$resBib['TotalJogos'];
+    $horas_jogadas = (int)$resBib['TotalHoras'];
+    $stmtBib->close();
+}
+
+// LÓGICA DE PATENTES (RANKS)
+$patente_nome = "Novato";
+$patente_cor = "#aaa";
+$patente_icone = "🔰";
+
+if ($total_jogos >= 10) {
+    $patente_nome = "Lenda Dourada";
+    $patente_cor = "gold";
+    $patente_icone = "👑";
+} elseif ($total_jogos >= 5) {
+    $patente_nome = "Colecionador Elite";
+    $patente_cor = "#00ff88";
+    $patente_icone = "💎";
+} elseif ($total_jogos >= 1) {
+    $patente_nome = "Explorador";
+    $patente_cor = "#ff9900";
+    $patente_icone = "⚔️";
+}
 ?>
 
 <!DOCTYPE html>
@@ -132,11 +143,18 @@ button:hover { background: white; }
 .erro { background: #8b1e24; color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-weight: bold; text-align: center; max-width: 1000px; margin: 0 auto 20px;}
 .tag-admin { display: inline-block; background: red; color: white; padding: 5px 10px; border-radius: 5px; font-size: 12px; margin-left: 10px; vertical-align: middle; }
 
-/* Estilos do Avatar */
-.avatar-container { display: flex; flex-direction: column; align-items: center; margin-bottom: 20px; }
-.avatar-preview { width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 3px solid gold; margin-bottom: 15px; background: #222; }
+/* Estilos do Avatar e Gamificação */
+.perfil-topo-gamificado { display: flex; align-items: center; gap: 20px; margin-bottom: 30px; background: #111; padding: 20px; border-radius: 15px; border: 1px solid #333;}
+.avatar-preview { width: 100px; height: 100px; border-radius: 50%; object-fit: cover; border: 3px solid <?= $patente_cor ?>; background: #222; }
+.info-gamer h1 { margin: 0 0 5px; color: white; }
+.info-gamer p { margin: 0; color: #aaa; font-size: 14px; }
+.rank-badge { display: inline-block; background: #222; border: 1px solid <?= $patente_cor ?>; color: <?= $patente_cor ?>; padding: 5px 10px; border-radius: 20px; font-weight: bold; font-size: 14px; margin-top: 8px;}
+.stats-grid { display: flex; gap: 15px; margin-top: 15px; }
+.stat-box { background: #1a1e24; padding: 15px; border-radius: 10px; text-align: center; flex: 1; border: 1px solid #333;}
+.stat-box strong { display: block; font-size: 24px; color: gold; }
+.stat-box span { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 1px;}
 
-@media (max-width: 768px) { .container { grid-template-columns: 1fr; } }
+@media (max-width: 768px) { .container { grid-template-columns: 1fr; } .perfil-topo-gamificado { flex-direction: column; text-align: center; } }
 </style>
 </head>
 <body>
@@ -148,22 +166,38 @@ button:hover { background: white; }
 
 <?= $mensagem ?>
 
+<!-- PAINEL GAMIFICADO -->
+<div class="perfil-topo-gamificado" style="max-width: 1000px; margin: 0 auto 30px;">
+    <img src="<?= htmlspecialchars($foto_atual) ?>" class="avatar-preview" alt="Foto de Perfil">
+    <div class="info-gamer">
+        <h1><?= htmlspecialchars($usuario['Nome_Exibicao'] ?? $usuario['Nome']) ?> <?php if($usuario['Nivel_Acesso'] == 1) echo '<span class="tag-admin">Admin</span>'; ?></h1>
+        <p>Membro desde: <?= isset($usuario['Data_Cadastro']) ? date('d/m/Y', strtotime($usuario['Data_Cadastro'])) : 'Sempre' ?></p>
+        <div class="rank-badge"><?= $patente_icone ?> Patente: <?= $patente_nome ?></div>
+        
+        <div class="stats-grid">
+            <div class="stat-box">
+                <strong><?= $total_jogos ?></strong>
+                <span>Jogos na Biblioteca</span>
+            </div>
+            <div class="stat-box">
+                <strong><?= $horas_jogadas ?>h</strong>
+                <span>Horas Jogadas</span>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="container">
     <div class="box">
-        <h2>👤 Meus Dados <?php if($usuario['Nivel_Acesso'] == 1) echo '<span class="tag-admin">Administrador</span>'; ?></h2>
-        
-        <!-- O enctype="multipart/form-data" é OBRIGATÓRIO para enviar arquivos -->
+        <h2>👤 Editar Dados</h2>
         <form method="POST" enctype="multipart/form-data">
-            
-            <div class="avatar-container">
-                <img src="<?= htmlspecialchars($foto_atual) ?>" class="avatar-preview" alt="Foto de Perfil">
-                <input type="file" name="avatar" accept="image/png, image/jpeg, image/jpg, image/gif">
-            </div>
+            <label>Trocar Avatar (JPG, PNG)</label>
+            <input type="file" name="avatar" accept="image/png, image/jpeg, image/jpg, image/gif">
 
             <label>Nome Completo</label>
             <input type="text" name="nome" value="<?= htmlspecialchars($usuario['Nome'] ?? '') ?>" required>
 
-            <label>Nome de Exibição (Fórum/Comentários)</label>
+            <label>Nome de Exibição (Gamer Tag)</label>
             <input type="text" name="nome_exibicao" placeholder="Como os outros te verão" value="<?= htmlspecialchars($usuario['Nome_Exibicao'] ?? '') ?>">
 
             <label>E-mail</label>
@@ -174,7 +208,7 @@ button:hover { background: white; }
     </div>
 
     <div class="box">
-        <h2>🔒 Alterar Senha</h2>
+        <h2>🔒 Segurança e Senha</h2>
         <form method="POST">
             <label>Senha Atual</label>
             <input type="password" name="senha_atual" placeholder="Digite sua senha atual" required>

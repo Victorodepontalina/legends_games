@@ -1,129 +1,56 @@
 <?php
 session_start();
-require_once 'conexao.php';
 
-if (!isset($_SESSION['ID_Usuario'])) {
+$host = "localhost";
+$user = "root";
+$pass = "";
+$db = "legends_games_1";
+
+$conn = new mysqli($host, $user, $pass, $db);
+$conn->set_charset("utf8mb4");
+
+if ($conn->connect_error) {
+    die("Erro de conexão: " . $conn->connect_error);
+}
+
+if (!isset($_SESSION['logado']) || $_SESSION['logado'] !== true) {
     header("Location: login.php");
-    exit;
+    exit();
 }
 
-$id_usuario = (int)$_SESSION['ID_Usuario'];
-$mensagem = "";
+$ID_Usuario = $_SESSION['ID_Usuario'];
 
-// Auto-configuração do Banco de Dados
-$conexao->query("ALTER TABLE usuario ADD COLUMN IF NOT EXISTS Nome_Exibicao VARCHAR(100) DEFAULT NULL");
-$conexao->query("ALTER TABLE usuario ADD COLUMN IF NOT EXISTS Foto_Perfil VARCHAR(255) DEFAULT NULL");
-$conexao->query("ALTER TABLE usuario ADD COLUMN IF NOT EXISTS Data_Cadastro DATETIME DEFAULT CURRENT_TIMESTAMP");
+// Busca dados do usuário no banco
+$sql = "SELECT * FROM usuario WHERE ID_Usuario = ?";
+$stmt = $conn->prepare($sql);
 
-$diretorio_uploads = 'uploads/';
-if (!is_dir($diretorio_uploads)) mkdir($diretorio_uploads, 0777, true);
-
-// ATUALIZAR PERFIL E AVATAR
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['atualizar_perfil'])) {
-    $nome = trim($_POST['nome']);
-    $nome_exibicao = trim($_POST['nome_exibicao']);
-    $email = trim($_POST['email']);
-    $caminho_foto = null;
-
-    if (isset($_FILES['avatar']) && $_FILES['avatar']['error'] === UPLOAD_ERR_OK) {
-        $extensao = strtolower(pathinfo($_FILES['avatar']['name'], PATHINFO_EXTENSION));
-        $extensoes_permitidas = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-        if (in_array($extensao, $extensoes_permitidas)) {
-            $novo_nome = "avatar_" . $id_usuario . "_" . time() . "." . $extensao;
-            $destino = $diretorio_uploads . $novo_nome;
-            if (move_uploaded_file($_FILES['avatar']['tmp_name'], $destino)) $caminho_foto = $destino;
-        } else {
-            $mensagem = "<div class='erro'>Formato inválido. Use JPG, PNG ou GIF.</div>";
-        }
-    }
-
-    if ($caminho_foto) {
-        $stmt = $conexao->prepare("UPDATE usuario SET Nome = ?, Nome_Exibicao = ?, Email = ?, Foto_Perfil = ? WHERE ID_usuario = ?");
-        $stmt->bind_param("ssssi", $nome, $nome_exibicao, $email, $caminho_foto, $id_usuario);
-    } else {
-        $stmt = $conexao->prepare("UPDATE usuario SET Nome = ?, Nome_Exibicao = ?, Email = ? WHERE ID_usuario = ?");
-        $stmt->bind_param("sssi", $nome, $nome_exibicao, $email, $id_usuario);
-    }
-
-    if (isset($stmt) && $stmt->execute()) $mensagem = "<div class='sucesso'>Perfil atualizado com sucesso!</div>";
-    elseif (!isset($mensagem) || $mensagem === '') $mensagem = "<div class='erro'>Erro ao atualizar. Tente novamente.</div>";
-    if (isset($stmt)) $stmt->close();
+if (!$stmt) {
+    die("Erro no prepare SQL: " . $conn->error);
 }
 
-// ALTERAR SENHA
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['atualizar_senha'])) {
-    $senha_atual = $_POST['senha_atual'];
-    $nova_senha = $_POST['nova_senha'];
-    $confirma_senha = $_POST['confirma_senha'];
+$stmt->bind_param("i", $ID_Usuario);
+$stmt->execute();
+$resultado = $stmt->get_result();
 
-    if ($nova_senha !== $confirma_senha) {
-        $mensagem = "<div class='erro'>As novas senhas não coincidem!</div>";
-    } else {
-        $stmt = $conexao->prepare("SELECT Senha FROM usuario WHERE ID_usuario = ?");
-        $stmt->bind_param("i", $id_usuario);
-        $stmt->execute();
-        $res = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-
-        if (password_verify($senha_atual, $res['Senha'])) {
-            $senha_hash = password_hash($nova_senha, PASSWORD_DEFAULT);
-            $stmtUp = $conexao->prepare("UPDATE usuario SET Senha = ? WHERE ID_usuario = ?");
-            $stmtUp->bind_param("si", $senha_hash, $id_usuario);
-            if ($stmtUp->execute()) $mensagem = "<div class='sucesso'>Senha alterada com segurança!</div>";
-            $stmtUp->close();
-        } else {
-            $mensagem = "<div class='erro'>A senha atual está incorreta!</div>";
-        }
-    }
+if ($resultado->num_rows > 0) {
+    $usuario = $resultado->fetch_assoc();
+} else {
+    die("Usuário não encontrado.");
 }
 
-// BUSCAR DADOS DO USUÁRIO
-$stmtDados = $conexao->prepare("SELECT Nome, Nome_Exibicao, Email, Nivel_Acesso, Foto_Perfil, Data_Cadastro FROM usuario WHERE ID_usuario = ?");
-$stmtDados->bind_param("i", $id_usuario);
-$stmtDados->execute();
-$usuario = $stmtDados->get_result()->fetch_assoc();
-$stmtDados->close();
+// Suporte para variação do nome das colunas no banco
+$nomeUsuario = $usuario['Nome'] ?? $usuario['nome'] ?? 'Usuário';
+$emailUsuario = $usuario['Email'] ?? $usuario['email'] ?? 'Não informado';
 
-$foto_atual = !empty($usuario['Foto_Perfil']) ? $usuario['Foto_Perfil'] : 'https://via.placeholder.com/150/222222/FFD700?text=Foto';
+// FOTO DE PERFIL PADRÃO
+$fotoUsuario = !empty($usuario['Foto'] ?? $usuario['foto'] ?? '')
+    ? ($usuario['Foto'] ?? $usuario['foto'])
+    : 'img/perfil_padrao.png';
 
-// ESTATÍSTICAS DE GAMIFICAÇÃO (Biblioteca)
-$total_jogos = 0;
-$horas_jogadas = 0;
-$stmtBib = $conexao->prepare("SELECT COUNT(ID_jogo) as TotalJogos, SUM(Horas_Jogadas) as TotalHoras FROM biblioteca WHERE ID_usuario = ?");
-if ($stmtBib) {
-    $stmtBib->bind_param("i", $id_usuario);
-    $stmtBib->execute();
-    $resBib = $stmtBib->get_result()->fetch_assoc();
-    $total_jogos = (int)$resBib['TotalJogos'];
-    $horas_jogadas = (int)$resBib['TotalHoras'];
-    $stmtBib->close();
-}
-
-// LÓGICA DE PATENTES (RANKS)
-$patente_nome = "Novato";
-$patente_cor = "#aaa";
-$patente_icone = "🔰";
-
-// 👑 REGRA VIP: Se for Admin, ganha a Patente Suprema
-if (isset($usuario['Nivel_Acesso']) && $usuario['Nivel_Acesso'] == 1) {
-    $patente_nome = "Patente Suprema";
-    $patente_cor = "#ff2a2a"; // Vermelho neon imponente
-    $patente_icone = "⚡";
-} 
-// Restante das regras para usuários normais
-elseif ($total_jogos >= 10) {
-    $patente_nome = "Lenda Dourada";
-    $patente_cor = "gold";
-    $patente_icone = "👑";
-} elseif ($total_jogos >= 5) {
-    $patente_nome = "Colecionador Elite";
-    $patente_cor = "#00ff88";
-    $patente_icone = "💎";
-} elseif ($total_jogos >= 1) {
-    $patente_nome = "Explorador";
-    $patente_cor = "#ff9900";
-    $patente_icone = "⚔️";
-}
+// Estatísticas
+$jogos = 24;
+$compras = 12;
+$favoritos = 8;
 ?>
 
 <!DOCTYPE html>
@@ -131,106 +58,394 @@ elseif ($total_jogos >= 10) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Meu Perfil - Legends Games</title>
+<title>Minha Conta - Legends Games</title>
+
 <style>
-* { box-sizing: border-box; }
-body { margin: 0; font-family: Arial, sans-serif; background: radial-gradient(circle at top, #1b2838, #05070a); color: white; padding: 20px;}
-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid gold; padding-bottom: 20px; margin-bottom: 30px;}
-.logo { color: gold; font-size: 28px; font-weight: bold; }
-.voltar { background: #222; color: gold; padding: 10px 20px; text-decoration: none; border-radius: 8px; font-weight: bold; }
-.voltar:hover { background: gold; color: black; }
-.container { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; max-width: 1000px; margin: auto; }
-.box { background: #14181f; padding: 30px; border-radius: 15px; border: 1px solid #333; }
-.box h2 { color: gold; margin-top: 0; border-bottom: 1px solid #333; padding-bottom: 10px; }
-label { display: block; margin-top: 15px; font-weight: bold; color: #ccc; }
-input { width: 100%; padding: 12px; margin-top: 8px; border-radius: 8px; border: 1px solid #444; background: #252a32; color: white; font-size: 15px;}
-input[type="file"] { padding: 8px; background: #111; cursor: pointer; }
-input:focus { outline: none; border-color: gold; }
-button { width: 100%; padding: 14px; margin-top: 25px; background: gold; color: black; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 16px;}
-button:hover { background: white; }
-.sucesso { background: #10251b; color: #00ff88; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-weight: bold; border: 1px solid #00ff88; text-align: center; max-width: 1000px; margin: 0 auto 20px;}
-.erro { background: #8b1e24; color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-weight: bold; text-align: center; max-width: 1000px; margin: 0 auto 20px;}
-.tag-admin { display: inline-block; background: red; color: white; padding: 5px 10px; border-radius: 5px; font-size: 12px; margin-left: 10px; vertical-align: middle; }
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
 
-/* Estilos do Avatar e Gamificação */
-.perfil-topo-gamificado { display: flex; align-items: center; gap: 20px; margin-bottom: 30px; background: #111; padding: 20px; border-radius: 15px; border: 1px solid #333;}
-.avatar-preview { width: 100px; height: 100px; border-radius: 50%; object-fit: cover; border: 3px solid <?= $patente_cor ?>; background: #222; }
-.info-gamer h1 { margin: 0 0 5px; color: white; }
-.info-gamer p { margin: 0; color: #aaa; font-size: 14px; }
-.rank-badge { display: inline-block; background: #222; border: 1px solid <?= $patente_cor ?>; color: <?= $patente_cor ?>; padding: 5px 10px; border-radius: 20px; font-weight: bold; font-size: 14px; margin-top: 8px;}
-.stats-grid { display: flex; gap: 15px; margin-top: 15px; }
-.stat-box { background: #1a1e24; padding: 15px; border-radius: 10px; text-align: center; flex: 1; border: 1px solid #333;}
-.stat-box strong { display: block; font-size: 24px; color: gold; }
-.stat-box span { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 1px;}
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: radial-gradient(circle at top, #1b2838, #0a0d12);
+    color: #fff;
+    min-height: 100vh;
+}
 
-@media (max-width: 768px) { .container { grid-template-columns: 1fr; } .perfil-topo-gamificado { flex-direction: column; text-align: center; } }
+/* TOPBAR */
+.topo {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 40px;
+    background: rgba(13, 15, 19, 0.95);
+    border-bottom: 2px solid #FFD700;
+    backdrop-filter: blur(10px);
+}
+
+.logo {
+    font-size: 26px;
+    font-weight: 800;
+    color: #FFD700;
+    letter-spacing: 1px;
+}
+
+.usuario-topo {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.usuario-topo img {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    border: 2px solid #FFD700;
+    object-fit: cover;
+}
+
+.usuario-topo span {
+    font-weight: 600;
+    color: #eee;
+}
+
+.logout {
+    background: #FFD700;
+    color: #0d0f13;
+    border: none;
+    padding: 8px 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    text-decoration: none;
+    transition: 0.3s;
+}
+
+.logout:hover {
+    background: #e6c200;
+    transform: translateY(-2px);
+}
+
+/* LAYOUT CONTAINER */
+.container {
+    display: flex;
+    max-width: 1300px;
+    margin: 30px auto;
+    gap: 30px;
+    padding: 0 20px;
+}
+
+/* MENU LATERAL */
+.menu {
+    width: 240px;
+    background: rgba(20, 24, 31, 0.8);
+    padding: 20px 10px;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 215, 0, 0.1);
+    height: fit-content;
+}
+
+.menu ul {
+    list-style: none;
+}
+
+.menu li a {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 18px;
+    color: #aaa;
+    text-decoration: none;
+    font-weight: 600;
+    border-radius: 10px;
+    transition: all 0.3s ease;
+    margin-bottom: 8px;
+}
+
+.menu li.ativo a,
+.menu li a:hover {
+    background: rgba(255, 215, 0, 0.15);
+    color: #FFD700;
+    border-left: 4px solid #FFD700;
+}
+
+/* CONTEÚDO PRINCIPAL */
+.conteudo {
+    flex: 1;
+}
+
+/* CARTÃO DE PERFIL */
+.perfil {
+    background: rgba(20, 24, 31, 0.9);
+    border-radius: 20px;
+    padding: 35px;
+    display: flex;
+    align-items: center;
+    gap: 30px;
+    border: 1px solid rgba(255, 215, 0, 0.2);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    margin-bottom: 30px;
+}
+
+.perfil-img-container {
+    position: relative;
+}
+
+.perfil img {
+    width: 130px;
+    height: 130px;
+    border-radius: 50%;
+    border: 3px solid #FFD700;
+    object-fit: cover;
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.2);
+}
+
+.info h1 {
+    font-size: 32px;
+    color: #fff;
+    margin-bottom: 5px;
+}
+
+.info p {
+    color: #88a0b5;
+    font-size: 15px;
+    margin-bottom: 12px;
+}
+
+.badge {
+    display: inline-block;
+    background: linear-gradient(135deg, #FFD700, #ffa500);
+    color: #000;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* CARDS ESTATÍSTICAS */
+.stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.card {
+    background: rgba(20, 24, 31, 0.7);
+    padding: 25px;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    text-align: center;
+    transition: transform 0.3s ease, border-color 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    border-color: rgba(255, 215, 0, 0.4);
+}
+
+.card h2 {
+    font-size: 38px;
+    color: #FFD700;
+    font-weight: 800;
+}
+
+.card p {
+    color: #9bb0c1;
+    margin-top: 5px;
+    font-size: 15px;
+}
+
+/* BOTÕES DE AÇÃO */
+.acoes {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.btn-editar {
+    background: #FFD700;
+    color: #000;
+}
+
+.btn-editar:hover {
+    background: #e6c200;
+    box-shadow: 0 0 15px rgba(255, 215, 0, 0.4);
+}
+
+.btn-senha {
+    background: transparent;
+    color: #FFD700;
+    border: 2px solid #FFD700;
+}
+
+.btn-senha:hover {
+    background: rgba(255, 215, 0, 0.1);
+}
+
+.btn-sair-conta {
+    background: #ff4d4d;
+    color: #fff;
+    border: 2px solid #ff4d4d;
+}
+
+.btn-sair-conta:hover {
+    background: #cc0000;
+    border-color: #cc0000;
+    box-shadow: 0 0 15px rgba(255, 77, 77, 0.4);
+}
+
+@media (max-width: 850px) {
+    .container {
+        flex-direction: column;
+    }
+
+    .menu {
+        width: 100%;
+    }
+
+    .perfil {
+        flex-direction: column;
+        text-align: center;
+    }
+}
 </style>
 </head>
+
 <body>
 
-<header>
+<header class="topo">
     <div class="logo">Legends_Games</div>
-    <a href="tela_inicial.php" class="voltar">⬅ Voltar à Loja</a>
+
+    <div class="usuario-topo">
+
+        <img
+            src="<?= htmlspecialchars($fotoUsuario); ?>"
+            alt="Avatar"
+        >
+
+        <span>
+            <?= htmlspecialchars($nomeUsuario); ?>
+        </span>
+
+        <a href="tela_inicial.php" class="logout">
+            Voltar
+        </a>
+
+    </div>
 </header>
 
-<?= $mensagem ?>
+<div class="container">
 
-<!-- PAINEL GAMIFICADO -->
-<div class="perfil-topo-gamificado" style="max-width: 1000px; margin: 0 auto 30px;">
-    <img src="<?= htmlspecialchars($foto_atual) ?>" class="avatar-preview" alt="Foto de Perfil">
-    <div class="info-gamer">
-        <h1><?= htmlspecialchars($usuario['Nome_Exibicao'] ?? $usuario['Nome']) ?> <?php if($usuario['Nivel_Acesso'] == 1) echo '<span class="tag-admin">Admin</span>'; ?></h1>
-        <p>Membro desde: <?= isset($usuario['Data_Cadastro']) ? date('d/m/Y', strtotime($usuario['Data_Cadastro'])) : 'Sempre' ?></p>
-        <div class="rank-badge"><?= $patente_icone ?> Patente: <?= $patente_nome ?></div>
-        
-        <div class="stats-grid">
-            <div class="stat-box">
-                <strong><?= $total_jogos ?></strong>
-                <span>Jogos na Biblioteca</span>
-            </div>
-            <div class="stat-box">
-                <strong><?= $horas_jogadas ?>h</strong>
-                <span>Horas Jogadas</span>
-            </div>
-        </div>
+<aside class="menu">
+    <ul>
+
+        <li class="ativo">
+            <a href="#">👤 Minha Conta</a>
+        </li>
+
+        <li>
+            <a href="biblioteca.php">🎮 Biblioteca</a>
+        </li>
+
+        <li>
+            <a href="configuração.php">⚙️Configurações</a>
+        </li>
+
+        <li>
+            <a href="carrinho.php">🛒 Carrinho</a>
+        </li>
+
+    </ul>
+</aside>
+
+<main class="conteudo">
+
+<section class="perfil">
+
+    <div class="perfil-img-container">
+
+        <img
+            src="<?= htmlspecialchars($fotoUsuario); ?>"
+            alt="Foto Perfil"
+        >
+
     </div>
+
+    <div class="info">
+
+        <h1>
+            <?= htmlspecialchars($nomeUsuario); ?>
+        </h1>
+
+        <p>
+            Email: <?= htmlspecialchars($emailUsuario); ?>
+        </p>
+
+        <span class="badge">
+            Membro VIP
+        </span>
+
+    </div>
+
+</section>
+
+<section class="stats">
+
+    <div class="card">
+        <h2><?= $jogos; ?></h2>
+        <p>Jogos Comprados</p>
+    </div>
+
+    <div class="card">
+        <h2><?= $compras; ?></h2>
+        <p>Total de Compras</p>
+    </div>
+
+    <div class="card">
+        <h2><?= $favoritos; ?></h2>
+        <p>Favoritos</p>
+    </div>
+
+</section>
+
+<div class="acoes">
+
+    <button class="btn btn-editar">
+        Editar Perfil
+    </button>
+
+    <button class="btn btn-senha">
+        Alterar Senha
+    </button>
+
+    <a
+        href="login.php"
+        class="btn btn-sair-conta"
+    >
+        Sair da Conta
+    </a>
+
 </div>
 
-<div class="container">
-    <div class="box">
-        <h2>👤 Editar Dados</h2>
-        <form method="POST" enctype="multipart/form-data">
-            <label>Trocar Avatar (JPG, PNG)</label>
-            <input type="file" name="avatar" accept="image/png, image/jpeg, image/jpg, image/gif">
+</main>
 
-            <label>Nome Completo</label>
-            <input type="text" name="nome" value="<?= htmlspecialchars($usuario['Nome'] ?? '') ?>" required>
-
-            <label>Nome de Exibição (Gamer Tag)</label>
-            <input type="text" name="nome_exibicao" placeholder="Como os outros te verão" value="<?= htmlspecialchars($usuario['Nome_Exibicao'] ?? '') ?>">
-
-            <label>E-mail</label>
-            <input type="email" name="email" value="<?= htmlspecialchars($usuario['Email'] ?? '') ?>" required>
-
-            <button type="submit" name="atualizar_perfil">💾 Salvar Alterações</button>
-        </form>
-    </div>
-
-    <div class="box">
-        <h2>🔒 Segurança e Senha</h2>
-        <form method="POST">
-            <label>Senha Atual</label>
-            <input type="password" name="senha_atual" placeholder="Digite sua senha atual" required>
-
-            <label>Nova Senha</label>
-            <input type="password" name="nova_senha" placeholder="Digite a nova senha" required>
-
-            <label>Confirmar Nova Senha</label>
-            <input type="password" name="confirma_senha" placeholder="Repita a nova senha" required>
-
-            <button type="submit" name="atualizar_senha">🔑 Atualizar Senha</button>
-        </form>
-    </div>
 </div>
 
 </body>

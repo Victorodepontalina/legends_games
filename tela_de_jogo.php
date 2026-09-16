@@ -5,24 +5,6 @@ require_once 'conexao.php';
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
-// Atualiza a tabela de comentários para aceitar Notas
-$conexao->query("ALTER TABLE comentarios ADD COLUMN IF NOT EXISTS Nota INT DEFAULT 5");
-
-$sqlCriarComentarios = "CREATE TABLE IF NOT EXISTS comentarios (
-    ID_Comentario INT(11) NOT NULL AUTO_INCREMENT,
-    ID_usuario INT(11) DEFAULT NULL,
-    ID_jogo INT(11) NOT NULL,
-    Comentario VARCHAR(1000) NOT NULL,
-    Nota INT DEFAULT 5,
-    Data_Comentario DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (ID_Comentario),
-    KEY ID_usuario (ID_usuario),
-    KEY ID_jogo (ID_jogo),
-    CONSTRAINT comentarios_ibfk_usuario FOREIGN KEY (ID_usuario) REFERENCES usuario (ID_usuario) ON DELETE SET NULL,
-    CONSTRAINT comentarios_ibfk_jogo FOREIGN KEY (ID_jogo) REFERENCES jogo (ID_jogo) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
-$conexao->query($sqlCriarComentarios);
-
 /* =========================================================
    BUSCAR JOGO NO BANCO DE DADOS
 ========================================================= */
